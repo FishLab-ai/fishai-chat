@@ -3,340 +3,313 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import {
-  Send,
-  Bot,
-  User,
-  Sparkles,
-  Code2,
-  FileText,
-  Trash2,
-  Cpu,
-  Zap,
-  Github,
+  Send, Github, ArrowRight, X, Code2, Pencil, Sparkles, Fish,
 } from 'lucide-react';
 
-interface ChatMessage {
+// ────── Types ──────
+interface ChatMsg {
   id: string;
   role: 'user' | 'assistant';
   content: string;
-  timestamp: number;
 }
 
-const EXAMPLE_PROMPTS = [
-  { icon: Code2, label: '写一段 Rust 代码', prompt: '用 Rust 写一个快速排序算法，并解释原理' },
-  { icon: FileText, label: '写一篇小作文', prompt: '写一篇关于"人工智能与未来"的短文，300字左右' },
-  { icon: Sparkles, label: '解释量子计算', prompt: '用简单易懂的语言解释什么是量子计算' },
-  { icon: Code2, label: '设计数据结构', prompt: '用 Rust 实现一个 LRU Cache，支持 get 和 put 操作' },
-];
+// ────── Markdown 渲染 ──────
+function Md({ text }: { text: string }) {
+  const blocks = text.split(/(```[\s\S]*?```)/g);
+  return (
+    <>
+      {blocks.map((block, i) => {
+        if (block.startsWith('```') && block.endsWith('```')) {
+          const lines = block.slice(3, -3).split('\n');
+          const lang = /^[a-z]/i.test(lines[0]) ? lines[0] : '';
+          const code = lines.slice(lang ? 1 : 0).join('\n');
+          return (
+            <div key={i} className="my-2.5 rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-700/60">
+              {lang && (
+                <div className="bg-neutral-50 dark:bg-neutral-800/80 px-3 py-1 text-[11px] font-mono text-neutral-400 dark:text-neutral-500 flex items-center gap-1.5 border-b border-neutral-200 dark:border-neutral-700/60">
+                  <Code2 className="w-3 h-3" />{lang}
+                </div>
+              )}
+              <pre className="bg-white dark:bg-neutral-900/60 p-3 overflow-x-auto text-[13px] leading-relaxed font-mono text-neutral-700 dark:text-neutral-300">
+                <code>{code}</code>
+              </pre>
+            </div>
+          );
+        }
+        const segs = block.split(/(`[^`\n]+`)/g);
+        return (
+          <span key={i}>
+            {segs.map((s, j) => {
+              if (s.startsWith('`') && s.endsWith('`'))
+                return <code key={j} className="bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 px-1 py-0.5 rounded text-[13px] font-mono">{s.slice(1, -1)}</code>;
+              const bs = s.split(/(\*\*[^*]+\*\*)/g);
+              return bs.map((b, k) =>
+                b.startsWith('**') && b.endsWith('**')
+                  ? <strong key={`${j}-${k}`} className="font-semibold">{b.slice(2, -2)}</strong>
+                  : <span key={`${j}-${k}`}>{b}</span>
+              );
+            })}
+          </span>
+        );
+      })}
+    </>
+  );
+}
 
-export default function Home() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+// ────── 介绍页 ──────
+function Landing({ onStart }: { onStart: () => void }) {
+  return (
+    <div className="min-h-screen flex flex-col bg-white dark:bg-neutral-950">
+      {/* 顶栏 */}
+      <header className="h-14 flex items-center justify-between px-6 border-b border-neutral-100 dark:border-neutral-800/60">
+        <div className="flex items-center gap-2.5">
+          <Fish className="w-5 h-5 text-blue-500" />
+          <span className="font-semibold text-[15px] tracking-tight text-neutral-900 dark:text-neutral-100">FishAI</span>
+        </div>
+        <a href="https://github.com/FishLab-ai" target="_blank" rel="noopener noreferrer">
+          <Button variant="ghost" size="sm" className="text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 gap-1.5 text-xs h-8 px-2.5">
+            <Github className="w-4 h-4" /> GitHub
+          </Button>
+        </a>
+      </header>
+
+      {/* 中心 */}
+      <main className="flex-1 flex flex-col items-center justify-center px-6">
+        <div className="max-w-sm text-center space-y-5">
+          {/* Logo */}
+          <div className="w-16 h-16 rounded-2xl bg-blue-500 flex items-center justify-center mx-auto shadow-lg shadow-blue-500/20">
+            <Fish className="w-8 h-8 text-white" />
+          </div>
+
+          <h1 className="text-3xl font-bold tracking-tight text-neutral-900 dark:text-neutral-100">FishAI</h1>
+
+          <p className="text-neutral-500 dark:text-neutral-400 text-sm leading-relaxed">
+            FishLab-ai 自研 AI 助手。<br />
+            Rust 推理引擎，4-bit 量化，轻量而聪明。<br />
+            能写代码、写文章、回答问题。
+          </p>
+
+          <div className="flex items-center justify-center gap-2 text-[11px] text-neutral-300 dark:text-neutral-600">
+            <span>Rust</span><span>·</span>
+            <span>4-bit Quantized</span><span>·</span>
+            <span>No Git LFS</span>
+          </div>
+
+          <Button
+            onClick={onStart}
+            className="bg-blue-500 hover:bg-blue-600 text-white rounded-lg px-6 h-11 text-sm font-medium gap-2 shadow-lg shadow-blue-500/20"
+          >
+            开始聊天 <ArrowRight className="w-4 h-4" />
+          </Button>
+        </div>
+      </main>
+
+      <footer className="h-12 flex items-center justify-center text-[11px] text-neutral-300 dark:text-neutral-700">
+        FishLab-ai
+      </footer>
+    </div>
+  );
+}
+
+// ────── 聊天页 ──────
+function Chat({ onBack }: { onBack: () => void }) {
+  const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [conversationId] = useState(() => `conv_${Date.now()}`);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [streaming, setStreaming] = useState(false);
+  const convId = useRef(`c_${Date.now()}`);
+  const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // 自动滚动到底部
+  // 打字机光标闪烁
+  const [showCursor, setShowCursor] = useState(true);
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
+    const t = setInterval(() => setShowCursor(c => !c), 530);
+    return () => clearInterval(t);
+  }, []);
+
+  // 滚动到底
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // 自动调整 textarea 高度
+  // textarea 自适应
   useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 200) + 'px';
-    }
+    const el = textareaRef.current;
+    if (el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 160) + 'px'; }
   }, [input]);
 
-  const sendMessage = useCallback(async (content: string) => {
-    if (!content.trim() || isLoading) return;
+  // 流式发送
+  const send = useCallback(async (text: string) => {
+    const content = text.trim();
+    if (!content || streaming) return;
 
-    const userMsg: ChatMessage = {
-      id: `msg_${Date.now()}`,
-      role: 'user',
-      content: content.trim(),
-      timestamp: Date.now(),
-    };
-
-    setMessages(prev => [...prev, userMsg]);
+    const userMsg: ChatMsg = { id: `u_${Date.now()}`, role: 'user', content };
+    const aid = `a_${Date.now()}`;
+    setMessages(prev => [...prev, userMsg, { id: aid, role: 'assistant', content: '' }]);
     setInput('');
-    setIsLoading(true);
+    setStreaming(true);
 
     try {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: content.trim(),
-          conversationId,
-          temperature: 0.7,
-          maxTokens: 2048,
-        }),
+        body: JSON.stringify({ message: content, conversationId: convId.current }),
       });
+      if (!res.ok) throw new Error('请求失败');
 
-      const data = await res.json();
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('无响应流');
 
-      if (data.error) {
-        throw new Error(data.error);
-      }
+      const dec = new TextDecoder();
+      let buf = '';
+      let full = '';
 
-      const assistantMsg: ChatMessage = {
-        id: `msg_${Date.now()}_ai`,
-        role: 'assistant',
-        content: data.reply,
-        timestamp: Date.now(),
-      };
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
 
-      setMessages(prev => [...prev, assistantMsg]);
-    } catch (error: any) {
-      const errorMsg: ChatMessage = {
-        id: `msg_${Date.now()}_err`,
-        role: 'assistant',
-        content: `抱歉，出了点问题: ${error.message}`,
-        timestamp: Date.now(),
-      };
-      setMessages(prev => [...prev, errorMsg]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [isLoading, conversationId]);
+        const lines = buf.split('\n');
+        buf = lines.pop() || '';
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage(input);
-    }
-  };
-
-  const clearChat = () => {
-    setMessages([]);
-  };
-
-  // 简单的 Markdown 渲染 (代码块)
-  const renderContent = (content: string) => {
-    const parts = content.split(/(```[\s\S]*?```)/g);
-    return parts.map((part, i) => {
-      if (part.startsWith('```') && part.endsWith('```')) {
-        const lines = part.slice(3, -3).split('\n');
-        const lang = lines[0] || '';
-        const code = lines.slice(1).join('\n');
-        return (
-          <div key={i} className="my-3 rounded-lg overflow-hidden">
-            {lang && (
-              <div className="bg-emerald-900/40 text-emerald-300 px-4 py-1.5 text-xs font-mono flex items-center gap-2">
-                <Code2 className="w-3 h-3" />
-                {lang}
-              </div>
-            )}
-            <pre className="bg-zinc-900/80 text-zinc-200 p-4 overflow-x-auto text-sm leading-relaxed">
-              <code>{code || lines.join('\n')}</code>
-            </pre>
-          </div>
-        );
-      }
-      // 处理行内代码
-      const inlineParts = part.split(/(`[^`]+`)/g);
-      return (
-        <span key={i}>
-          {inlineParts.map((p, j) => {
-            if (p.startsWith('`') && p.endsWith('`')) {
-              return (
-                <code key={j} className="bg-emerald-900/30 text-emerald-300 px-1.5 py-0.5 rounded text-sm font-mono">
-                  {p.slice(1, -1)}
-                </code>
-              );
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') continue;
+          try {
+            const obj = JSON.parse(data);
+            if (obj.content) {
+              full += obj.content;
+              const current = full;
+              setMessages(prev => prev.map(m => m.id === aid ? { ...m, content: current } : m));
             }
-            // 处理加粗
-            const boldParts = p.split(/(\*\*[^*]+\*\*)/g);
-            return boldParts.map((bp, k) => {
-              if (bp.startsWith('**') && bp.endsWith('**')) {
-                return <strong key={`${j}-${k}`} className="font-semibold text-white">{bp.slice(2, -2)}</strong>;
-              }
-              return <span key={`${j}-${k}`}>{bp}</span>;
-            });
-          })}
-        </span>
-      );
-    });
+          } catch {}
+        }
+      }
+    } catch {
+      setMessages(prev => prev.map(m =>
+        m.id === aid ? { ...m, content: '出了点问题，请重试。' } : m
+      ));
+    } finally {
+      setStreaming(false);
+    }
+  }, [streaming]);
+
+  const onKey = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input); }
   };
+
+  const suggestions = [
+    { icon: Code2, label: '写代码', prompt: '用 Rust 实现一个 LRU Cache，支持 get 和 put 操作' },
+    { icon: Pencil, label: '写小作文', prompt: '写一篇关于"人工智能与未来"的短文，300字左右' },
+    { icon: Sparkles, label: '解释概念', prompt: '什么是 Transformer 架构？用简单的语言解释' },
+  ];
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
-      {/* 顶部导航 */}
-      <header className="border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-xl sticky top-0 z-50">
-        <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center">
-              <Cpu className="w-4 h-4 text-zinc-950" />
-            </div>
-            <div>
-              <h1 className="text-sm font-bold tracking-tight">TinyAI</h1>
-              <p className="text-[10px] text-zinc-500">Rust Engine &middot; 4-bit Quantized &middot; Self-developed</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-[10px] border-emerald-800 text-emerald-400 bg-emerald-950/30">
-              <Zap className="w-2.5 h-2.5 mr-1" />
-              ~52M params
-            </Badge>
-            <Badge variant="outline" className="text-[10px] border-teal-800 text-teal-400 bg-teal-950/30">
-              ~25MB quantized
-            </Badge>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-zinc-500 hover:text-zinc-300"
-              onClick={clearChat}
-              title="清除对话"
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
-            <a
-              href="https://github.com/FishLab-ai"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-500 hover:text-zinc-300">
-                <Github className="w-4 h-4" />
-              </Button>
-            </a>
-          </div>
+    <div className="h-screen flex flex-col bg-white dark:bg-neutral-950">
+      {/* 顶栏 */}
+      <header className="h-12 flex items-center justify-between px-4 border-b border-neutral-100 dark:border-neutral-800/60 shrink-0">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300" onClick={onBack}>
+            <X className="w-4 h-4" />
+          </Button>
+          <Fish className="w-4 h-4 text-blue-500" />
+          <span className="font-medium text-sm text-neutral-700 dark:text-neutral-300">FishAI</span>
         </div>
+        <a href="https://github.com/FishLab-ai" target="_blank" rel="noopener noreferrer">
+          <Button variant="ghost" size="icon" className="h-8 w-8 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300">
+            <Github className="w-4 h-4" />
+          </Button>
+        </a>
       </header>
 
-      {/* 聊天区域 */}
-      <main className="flex-1 overflow-hidden">
-        <ScrollArea className="h-[calc(100vh-8.5rem)]" ref={scrollRef}>
-          <div className="max-w-4xl mx-auto px-4 py-6">
-            {messages.length === 0 ? (
-              /* 欢迎界面 */
-              <div className="flex flex-col items-center justify-center min-h-[60vh] gap-8">
-                <div className="text-center space-y-4">
-                  <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center mx-auto shadow-lg shadow-emerald-500/20">
-                    <Cpu className="w-10 h-10 text-zinc-950" />
-                  </div>
-                  <h2 className="text-3xl font-bold bg-gradient-to-r from-emerald-400 to-teal-400 bg-clip-text text-transparent">
-                    TinyAI
-                  </h2>
-                  <p className="text-zinc-400 max-w-md text-sm leading-relaxed">
-                    超轻量自研 AI，完全用 Rust 构建，4-bit 量化权重仅需 ~25MB。<br/>
-                    能写代码、写小作文、回答问题 —— 小而能干。
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-lg">
-                  {EXAMPLE_PROMPTS.map((item, i) => (
-                    <Card
-                      key={i}
-                      className="bg-zinc-900/50 border-zinc-800/50 hover:border-emerald-800/50 hover:bg-zinc-900/80 cursor-pointer transition-all duration-200 group"
-                      onClick={() => sendMessage(item.prompt)}
-                    >
-                      <div className="p-4 flex items-start gap-3">
-                        <item.icon className="w-4 h-4 text-emerald-400 mt-0.5 shrink-0 group-hover:scale-110 transition-transform" />
-                        <div>
-                          <p className="text-sm font-medium text-zinc-200">{item.label}</p>
-                          <p className="text-xs text-zinc-500 mt-1 line-clamp-2">{item.prompt}</p>
-                        </div>
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-
-                <div className="flex items-center gap-4 text-[10px] text-zinc-600">
-                  <span className="flex items-center gap-1"><Cpu className="w-3 h-3" /> Rust Engine</span>
-                  <span className="flex items-center gap-1"><Zap className="w-3 h-3" /> 4-bit INT4</span>
-                  <span className="flex items-center gap-1"><Github className="w-3 h-3" /> FishLab-ai</span>
-                </div>
+      {/* 消息 */}
+      <main className="flex-1 overflow-y-auto">
+        <div className="max-w-2xl mx-auto px-4 py-6">
+          {messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center min-h-[50vh] gap-5">
+              <div className="w-11 h-11 rounded-xl bg-blue-500 flex items-center justify-center">
+                <Fish className="w-5 h-5 text-white" />
               </div>
-            ) : (
-              /* 消息列表 */
-              <div className="space-y-6 pb-4">
-                {messages.map((msg) => (
-                  <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    {msg.role === 'assistant' && (
-                      <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shrink-0 mt-1">
-                        <Bot className="w-3.5 h-3.5 text-zinc-950" />
-                      </div>
-                    )}
-                    <div
-                      className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${
-                        msg.role === 'user'
-                          ? 'bg-emerald-600/20 border border-emerald-800/30 text-zinc-100'
-                          : 'bg-zinc-900/50 border border-zinc-800/30 text-zinc-300'
-                      }`}
-                    >
-                      <div className="whitespace-pre-wrap break-words">
-                        {renderContent(msg.content)}
-                      </div>
-                    </div>
-                    {msg.role === 'user' && (
-                      <div className="w-7 h-7 rounded-lg bg-zinc-700 flex items-center justify-center shrink-0 mt-1">
-                        <User className="w-3.5 h-3.5 text-zinc-300" />
-                      </div>
-                    )}
-                  </div>
+              <p className="text-sm text-neutral-400 dark:text-neutral-500">有什么可以帮你的？</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {suggestions.map((s, i) => (
+                  <button
+                    key={i}
+                    onClick={() => send(s.prompt)}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-800 hover:border-blue-400 dark:hover:border-blue-600 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 text-xs text-neutral-500 dark:text-neutral-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                  >
+                    <s.icon className="w-3.5 h-3.5" />
+                    {s.label}
+                  </button>
                 ))}
-
-                {isLoading && (
-                  <div className="flex gap-3">
-                    <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-400 to-teal-500 flex items-center justify-center shrink-0">
-                      <Bot className="w-3.5 h-3.5 text-zinc-950" />
-                    </div>
-                    <div className="bg-zinc-900/50 border border-zinc-800/30 rounded-2xl px-4 py-3">
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                        <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                        <div className="w-2 h-2 bg-emerald-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                        <span className="text-xs text-zinc-500 ml-2">思考中...</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
-            )}
-          </div>
-        </ScrollArea>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {messages.map(msg => (
+                <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div
+                    className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                      msg.role === 'user'
+                        ? 'bg-blue-500 text-white'
+                        : 'text-neutral-800 dark:text-neutral-200'
+                    }`}
+                  >
+                    {msg.role === 'assistant' ? (
+                      <>
+                        <Md text={msg.content} />
+                        {streaming && msg.content !== '' && msg.id === messages[messages.length - 1]?.id && (
+                          <span className={`inline-block w-[2px] h-[16px] bg-blue-500 ml-0.5 align-middle ${showCursor ? 'opacity-100' : 'opacity-0'} transition-opacity`} />
+                        )}
+                        {msg.content === '' && streaming && (
+                          <span className={`inline-block w-[2px] h-[16px] bg-blue-500 align-middle ${showCursor ? 'opacity-100' : 'opacity-0'} transition-opacity`} />
+                        )}
+                      </>
+                    ) : (
+                      <span className="whitespace-pre-wrap break-words">{msg.content}</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <div ref={chatEndRef} />
+        </div>
       </main>
 
-      {/* 输入区域 */}
-      <footer className="border-t border-zinc-800/50 bg-zinc-950/80 backdrop-blur-xl">
-        <div className="max-w-4xl mx-auto px-4 py-3">
-          <div className="flex gap-2 items-end">
-            <div className="flex-1 relative">
-              <Textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="给 TinyAI 发消息... (Enter 发送, Shift+Enter 换行)"
-                className="min-h-[44px] max-h-[200px] bg-zinc-900/50 border-zinc-800/50 focus:border-emerald-800/50 focus-visible:ring-emerald-800/20 resize-none text-sm text-zinc-200 placeholder:text-zinc-600 rounded-xl"
-                rows={1}
-                disabled={isLoading}
-              />
-            </div>
-            <Button
-              onClick={() => sendMessage(input)}
-              disabled={!input.trim() || isLoading}
-              className="h-11 w-11 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-zinc-950 shrink-0 shadow-lg shadow-emerald-500/20 disabled:opacity-30 disabled:shadow-none"
-              size="icon"
-            >
-              <Send className="w-4 h-4" />
-            </Button>
-          </div>
-          <p className="text-[10px] text-zinc-600 mt-2 text-center">
-            TinyAI v0.1 &middot; FishLab-ai &middot; Rust + 4-bit Quantization &middot; No Git LFS Required
-          </p>
+      {/* 输入 */}
+      <footer className="border-t border-neutral-100 dark:border-neutral-800/60 p-3 shrink-0">
+        <div className="max-w-2xl mx-auto flex gap-2 items-end">
+          <Textarea
+            ref={textareaRef}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={onKey}
+            placeholder="输入消息…"
+            className="min-h-[40px] max-h-[160px] resize-none text-sm bg-neutral-50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 focus-visible:ring-blue-500/20 focus-visible:border-blue-400 rounded-xl"
+            rows={1}
+            disabled={streaming}
+          />
+          <Button
+            onClick={() => send(input)}
+            disabled={!input.trim() || streaming}
+            className="h-10 w-10 rounded-xl bg-blue-500 hover:bg-blue-600 text-white shrink-0 disabled:opacity-30"
+            size="icon"
+          >
+            <Send className="w-4 h-4" />
+          </Button>
         </div>
       </footer>
     </div>
   );
+}
+
+// ────── 主页 ──────
+export default function Home() {
+  const [page, setPage] = useState<'landing' | 'chat'>('landing');
+  if (page === 'chat') return <Chat onBack={() => setPage('landing')} />;
+  return <Landing onStart={() => setPage('chat')} />;
 }

@@ -14,24 +14,24 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "TinyAI - 超轻量自研 AI (Rust + 4-bit Quantized)",
-  description: "TinyAI by FishLab-ai — 完全自研的 GPT 推理引擎，Rust 编写，4-bit 量化权重仅 ~25MB，无需 Git LFS",
-  keywords: ["TinyAI", "FishLab-ai", "Rust", "GPT", "4-bit Quantization", "AI", "self-developed"],
+  title: "FishAI - FishLab-ai 自研 AI 助手",
+  description: "FishAI — FishLab-ai 自研 AI 助手，Rust 推理引擎，4-bit 量化，轻量而聪明",
+  keywords: ["FishAI", "FishLab-ai", "Rust", "GPT", "4-bit", "AI", "self-developed"],
   authors: [{ name: "FishLab-ai" }],
   icons: {
     icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
   },
   openGraph: {
-    title: "TinyAI - 超轻量自研 AI",
-    description: "Rust Engine + 4-bit Quantization, No Git LFS Required",
+    title: "FishAI - FishLab-ai 自研 AI 助手",
+    description: "Rust Engine + 4-bit Quantized, No Git LFS Required",
     url: "https://github.com/FishLab-ai",
-    siteName: "TinyAI",
+    siteName: "FishAI",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "TinyAI - 超轻量自研 AI",
-    description: "Rust Engine + 4-bit Quantization, No Git LFS Required",
+    title: "FishAI - FishLab-ai 自研 AI 助手",
+    description: "Rust Engine + 4-bit Quantized, No Git LFS Required",
   },
 };
 
