@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import {
-  Send, Github, ArrowRight, X, Code2, Pencil, Sparkles, Fish,
-  Sun, Moon, ChevronDown, Zap, Cpu, Binary,
+  Send, Github, ArrowRight, X, Code2, Fish,
+  Sun, Moon, ChevronDown, Cpu, Binary, Zap, Sparkles, Copy, Check,
 } from 'lucide-react';
 
 // ────── Types ──────
@@ -14,96 +14,67 @@ interface ChatMsg {
   content: string;
 }
 
-// ────── 实时 Markdown 渲染（支持未闭合的代码块） ──────
-function Md({ text }: { text: string }) {
-  // 用更智能的方式处理代码块：检测未闭合的 ```
-  const elements: React.ReactNode[] = [];
-  let remaining = text;
-  let keyIdx = 0;
+/* ══════════════════════════════════════════════════════════════
+ *  实时 Markdown 渲染引擎
+ *  - 支持流式渐进渲染：未闭合的代码块、未闭合的加粗等
+ *  - 支持标题 / 列表 / 引用 / 代码块 / 行内代码 / 加粗
+ * ══════════════════════════════════════════════════════════════ */
 
-  while (remaining.length > 0) {
-    const codeStart = remaining.indexOf('```');
-
-    if (codeStart === -1) {
-      // 没有更多代码块，渲染行内 markdown
-      elements.push(<InlineMd key={keyIdx++} text={remaining} />);
-      break;
-    }
-
-    // 代码块之前的文本
-    if (codeStart > 0) {
-      elements.push(<InlineMd key={keyIdx++} text={remaining.slice(0, codeStart)} />);
-    }
-
-    // 找闭合的 ```
-    const afterFirst = remaining.slice(codeStart + 3);
-    const codeEnd = afterFirst.indexOf('```');
-
-    if (codeEnd === -1) {
-      // ── 未闭合的代码块（流式生成中） ──
-      const lines = afterFirst.split('\n');
-      const lang = /^[a-zA-Z][a-zA-Z0-9+._-]*$/.test(lines[0]) ? lines[0] : '';
-      const code = lines.slice(lang ? 1 : 0).join('\n');
-      elements.push(
-        <CodeBlock key={keyIdx++} lang={lang} code={code} streaming />
-      );
-      break;
-    } else {
-      // ── 闭合的代码块 ──
-      const inner = afterFirst.slice(0, codeEnd);
-      const lines = inner.split('\n');
-      const lang = /^[a-zA-Z][a-zA-Z0-9+._-]*$/.test(lines[0]) ? lines[0] : '';
-      const code = lines.slice(lang ? 1 : 0).join('\n');
-      elements.push(
-        <CodeBlock key={keyIdx++} lang={lang} code={code} streaming={false} />
-      );
-      remaining = afterFirst.slice(codeEnd + 3);
-    }
-  }
-
-  return <>{elements}</>;
-}
-
-// 代码块组件
+// ── 代码块 ──
 function CodeBlock({ lang, code, streaming }: { lang: string; code: string; streaming: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
   return (
-    <div className="my-2.5 rounded-xl overflow-hidden border border-neutral-200/80 dark:border-neutral-700/50 bg-neutral-50/50 dark:bg-neutral-800/30">
-      <div className="px-3.5 py-1.5 text-[11px] font-mono text-neutral-400 dark:text-neutral-500 flex items-center justify-between border-b border-neutral-200/60 dark:border-neutral-700/40 bg-neutral-100/50 dark:bg-neutral-800/50">
+    <div className="my-2.5 rounded-xl overflow-hidden border border-neutral-200/80 dark:border-neutral-700/50 bg-[#fafafa] dark:bg-neutral-800/40 group">
+      <div className="px-3.5 py-1.5 text-[11px] font-mono text-neutral-400 dark:text-neutral-500 flex items-center justify-between border-b border-neutral-200/60 dark:border-neutral-700/40 bg-neutral-100/60 dark:bg-neutral-800/60">
         <span className="flex items-center gap-1.5">
           <Code2 className="w-3 h-3" />{lang || 'code'}
         </span>
-        {streaming && (
-          <span className="flex items-center gap-1 text-blue-400">
-            <span className="w-1 h-1 rounded-full bg-blue-400 animate-pulse" />
-            生成中
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {streaming && (
+            <span className="flex items-center gap-1 text-blue-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+              生成中
+            </span>
+          )}
+          {!streaming && (
+            <button onClick={handleCopy} className="opacity-0 group-hover:opacity-100 transition-opacity text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300">
+              {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+            </button>
+          )}
+        </div>
       </div>
-      <pre className="p-3.5 overflow-x-auto text-[13px] leading-relaxed font-mono text-neutral-700 dark:text-neutral-300">
+      <pre className="p-3.5 overflow-x-auto text-[13px] leading-[1.65] font-mono text-neutral-700 dark:text-neutral-300">
         <code>{code}{streaming ? '\n' : ''}</code>
       </pre>
     </div>
   );
 }
 
-// 行内 Markdown（加粗 + 行内代码）
+// ── 行内 Markdown：加粗 + 行内代码 + 链接 ──
 function InlineMd({ text }: { text: string }) {
-  const parts = text.split(/(`[^`\n]+`)/g);
+  // 先拆行内代码，再在每个非代码段内拆加粗
+  const segments = text.split(/(`[^`\n]+`)/g);
   return (
     <span>
-      {parts.map((part, i) => {
-        if (part.startsWith('`') && part.endsWith('`') && part.length > 2) {
-          return <code key={i} className="bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-md text-[13px] font-mono">{part.slice(1, -1)}</code>;
+      {segments.map((seg, i) => {
+        if (seg.startsWith('`') && seg.endsWith('`') && seg.length > 2) {
+          return <code key={i} className="bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-md text-[13px] font-mono">{seg.slice(1, -1)}</code>;
         }
-        // 处理 **加粗**
-        const boldParts = part.split(/(\*\*[^*]+\*\*)/g);
+        // 拆加粗
+        const boldParts = seg.split(/(\*\*[^*]+\*\*)/g);
         if (boldParts.length === 1) {
-          // 处理未闭合的 **（流式中）
-          const halfBold = part.split(/(\*\*[^*]*)$/);
+          // 处理未闭合的 **（流式中可能遇到）
+          const halfBold = seg.split(/(\*\*[^*]*)$/);
           if (halfBold.length > 1 && halfBold[1].startsWith('**') && !halfBold[1].endsWith('**')) {
             return <span key={i}><span>{halfBold[0]}</span><span className="text-neutral-400">{halfBold[1]}</span></span>;
           }
-          return <span key={i}>{part}</span>;
+          return <span key={i}>{seg}</span>;
         }
         return (
           <span key={i}>
@@ -118,6 +89,180 @@ function InlineMd({ text }: { text: string }) {
       })}
     </span>
   );
+}
+
+// ── 主 Markdown 渲染器 ──
+function Md({ text }: { text: string }) {
+  // 第一步：拆出代码块（含未闭合的）
+  const blocks: { type: 'code' | 'text'; content: string; lang: string }[] = useMemo(() => {
+    const result: { type: 'code' | 'text'; content: string; lang: string }[] = [];
+    let remaining = text;
+
+    while (remaining.length > 0) {
+      const codeStart = remaining.indexOf('```');
+      if (codeStart === -1) {
+        result.push({ type: 'text', content: remaining, lang: '' });
+        break;
+      }
+      if (codeStart > 0) {
+        result.push({ type: 'text', content: remaining.slice(0, codeStart), lang: '' });
+      }
+      const afterFirst = remaining.slice(codeStart + 3);
+      const codeEnd = afterFirst.indexOf('```');
+      if (codeEnd === -1) {
+        // 未闭合代码块（流式生成中）
+        const lines = afterFirst.split('\n');
+        const lang = /^[a-zA-Z][a-zA-Z0-9+._-]*$/.test(lines[0]) ? lines[0] : '';
+        const code = lines.slice(lang ? 1 : 0).join('\n');
+        result.push({ type: 'code', content: code, lang });
+        break;
+      } else {
+        const inner = afterFirst.slice(0, codeEnd);
+        const lines = inner.split('\n');
+        const lang = /^[a-zA-Z][a-zA-Z0-9+._-]*$/.test(lines[0]) ? lines[0] : '';
+        const code = lines.slice(lang ? 1 : 0).join('\n');
+        result.push({ type: 'code', content: code, lang });
+        remaining = afterFirst.slice(codeEnd + 3);
+      }
+    }
+    return result;
+  }, [text]);
+
+  // 第二步：渲染
+  return (
+    <>
+      {blocks.map((block, i) => {
+        if (block.type === 'code') {
+          const isLast = i === blocks.length - 1;
+          return <CodeBlock key={i} lang={block.lang} code={block.content} streaming={isLast} />;
+        }
+        // 文本块：按行渲染，支持标题/列表/引用
+        return <TextBlock key={i} text={block.content} />;
+      })}
+    </>
+  );
+}
+
+// ── 文本块渲染：标题 / 列表 / 引用 / 普通段落 ──
+function TextBlock({ text }: { text: string }) {
+  const lines = text.split('\n');
+  const elements: React.ReactNode[] = [];
+  let i = 0;
+  let listItems: string[] = [];
+  let listType: 'ul' | 'ol' | null = null;
+
+  const flushList = () => {
+    if (listItems.length === 0) return;
+    if (listType === 'ul') {
+      elements.push(
+        <ul key={`ul-${elements.length}`} className="my-1.5 ml-4 space-y-0.5 list-disc list-outside text-neutral-700 dark:text-neutral-300">
+          {listItems.map((item, j) => <li key={j} className="text-sm leading-relaxed pl-0.5"><InlineMd text={item} /></li>)}
+        </ul>
+      );
+    } else if (listType === 'ol') {
+      elements.push(
+        <ol key={`ol-${elements.length}`} className="my-1.5 ml-4 space-y-0.5 list-decimal list-outside text-neutral-700 dark:text-neutral-300">
+          {listItems.map((item, j) => <li key={j} className="text-sm leading-relaxed pl-0.5"><InlineMd text={item} /></li>)}
+        </ol>
+      );
+    }
+    listItems = [];
+    listType = null;
+  };
+
+  while (i < lines.length) {
+    const line = lines[i];
+
+    // 空行
+    if (line.trim() === '') {
+      flushList();
+      i++;
+      continue;
+    }
+
+    // 标题
+    const headingMatch = line.match(/^(#{1,6})\s+(.+)/);
+    if (headingMatch) {
+      flushList();
+      const level = headingMatch[1].length;
+      const content = headingMatch[2];
+      const sizes: Record<number, string> = {
+        1: 'text-lg font-bold',
+        2: 'text-base font-bold',
+        3: 'text-[15px] font-semibold',
+        4: 'text-sm font-semibold',
+        5: 'text-sm font-semibold',
+        6: 'text-sm font-semibold',
+      };
+      elements.push(
+        <div key={`h-${elements.length}`} className={`${sizes[level]} text-neutral-900 dark:text-neutral-100 mt-3 mb-1.5`}>
+          <InlineMd text={content} />
+        </div>
+      );
+      i++;
+      continue;
+    }
+
+    // 引用
+    if (line.startsWith('> ')) {
+      flushList();
+      const quoteLines: string[] = [];
+      while (i < lines.length && lines[i].startsWith('> ')) {
+        quoteLines.push(lines[i].slice(2));
+        i++;
+      }
+      elements.push(
+        <blockquote key={`bq-${elements.length}`} className="my-1.5 border-l-3 border-blue-400/60 dark:border-blue-500/40 pl-3 text-neutral-600 dark:text-neutral-400 text-sm leading-relaxed">
+          {quoteLines.map((ql, j) => <p key={j} className="mb-0.5 last:mb-0"><InlineMd text={ql} /></p>)}
+        </blockquote>
+      );
+      continue;
+    }
+
+    // 无序列表
+    const ulMatch = line.match(/^[\s]*[-*]\s+(.+)/);
+    if (ulMatch) {
+      if (listType !== 'ul') flushList();
+      listType = 'ul';
+      listItems.push(ulMatch[1]);
+      i++;
+      continue;
+    }
+
+    // 有序列表
+    const olMatch = line.match(/^[\s]*\d+[.)]\s+(.+)/);
+    if (olMatch) {
+      if (listType !== 'ol') flushList();
+      listType = 'ol';
+      listItems.push(olMatch[1]);
+      i++;
+      continue;
+    }
+
+    // 分隔线
+    if (/^-{3,}$/.test(line.trim()) || /^\*{3,}$/.test(line.trim())) {
+      flushList();
+      elements.push(<hr key={`hr-${elements.length}`} className="my-3 border-neutral-200 dark:border-neutral-700" />);
+      i++;
+      continue;
+    }
+
+    // 普通段落
+    flushList();
+    const paraLines: string[] = [];
+    while (i < lines.length && lines[i].trim() !== '' && !lines[i].match(/^(#{1,6}\s|> |[-*]\s|\d+[.)]\s)/)) {
+      paraLines.push(lines[i]);
+      i++;
+    }
+    elements.push(
+      <p key={`p-${elements.length}`} className="my-1 text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">
+        <InlineMd text={paraLines.join('\n')} />
+      </p>
+    );
+  }
+
+  flushList();
+  return <>{elements}</>;
 }
 
 // ────── 主题 Hook ──────
@@ -255,12 +400,13 @@ function Chat({ onBack, dark, setDark }: { onBack: () => void; dark: boolean; se
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // ── 打字机核心状态 ──
-  const bufferRef = useRef('');              // SSE token 缓冲队列
+  // ── 打字机核心 ──
+  // 核心思路：setInterval 固定节拍，每 tick 释放固定数量的字符
+  // 这样字符出现节奏完全均匀，肉眼看到的就是"丝滑"
+  const bufferRef = useRef('');              // SSE token 缓冲区
   const displayedRef = useRef('');           // 已显示文本
   const streamingIdRef = useRef<string | null>(null);
-  const rafRef = useRef<number | null>(null);
-  const lastTickRef = useRef(0);            // 上次 tick 时间
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // ── 滚动控制 ──
   const [showScrollBtn, setShowScrollBtn] = useState(false);
@@ -279,7 +425,6 @@ function Chat({ onBack, dark, setDark }: { onBack: () => void; dark: boolean; se
     chatEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'instant' });
   }, []);
 
-  // 消息变化时自动滚动（仅在底部）
   useEffect(() => {
     if (isNearBottomRef.current) scrollToBottom();
   }, [messages, scrollToBottom]);
@@ -290,63 +435,51 @@ function Chat({ onBack, dark, setDark }: { onBack: () => void; dark: boolean; se
     if (el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 160) + 'px'; }
   }, [input]);
 
-  // ── 打字机 RAF 循环 ──
+  // ── 打字机节拍循环 ──
+  // 关键：25ms 一次 tick = 40 ticks/秒
+  // 每个 tick 释放 N 个字符（根据缓冲积压量分级）
+  // 分级越少跳动越少 → 丝滑感越强
   const startTypewriter = useCallback((aid: string) => {
     streamingIdRef.current = aid;
     bufferRef.current = '';
     displayedRef.current = '';
-    lastTickRef.current = performance.now();
 
-    const tick = (now: number) => {
-      const dt = Math.min(now - lastTickRef.current, 50); // cap at 50ms 防止跳帧
-      lastTickRef.current = now;
-
+    // 固定 25ms 节拍
+    timerRef.current = setInterval(() => {
       const bufLen = bufferRef.current.length;
-      if (bufLen > 0) {
-        // ── 自适应速度算法 ──
-        // 基础: 80 字符/秒 — 丝滑但跟得上
-        // 积压加速: 缓冲区越长出字越快，保证永远追得上生成速度
-        const BASE_CPS = 80;
-        const ACCEL_THRESHOLD = 5;   // >5 字开始加速
-        const ACCEL_RATE = 0.5;      // 每多一字加速 0.5x
+      if (bufLen === 0) return;
 
-        let cps = BASE_CPS;
-        if (bufLen > ACCEL_THRESHOLD) {
-          cps = BASE_CPS * (1 + (bufLen - ACCEL_THRESHOLD) * ACCEL_RATE);
-        }
-        // 极端积压时直接跳到跟生成同速（不会超过）
-        if (bufLen > 40) {
-          cps = Math.max(cps, bufLen * 10); // 疯狂加速把积压消化掉
-        }
+      // ── 分级速度表 ──
+      // 缓冲积压 ≤8 字 → 1字/tick = 40字/秒（丝滑基准）
+      // 缓冲积压 9~20  → 2字/tick = 80字/秒
+      // 缓冲积压 21~40 → 3字/tick = 120字/秒
+      // 缓冲积压 >40   → 5字/tick = 200字/秒（快速追赶）
+      let charsPerTick: number;
+      if (bufLen <= 8) charsPerTick = 1;
+      else if (bufLen <= 20) charsPerTick = 2;
+      else if (bufLen <= 40) charsPerTick = 3;
+      else charsPerTick = 5;
 
-        const charsThisFrame = Math.max(1, Math.round(cps * dt / 1000));
-        const toShow = bufferRef.current.slice(0, charsThisFrame);
-        bufferRef.current = bufferRef.current.slice(charsThisFrame);
-        displayedRef.current += toShow;
+      const toShow = bufferRef.current.slice(0, charsPerTick);
+      bufferRef.current = bufferRef.current.slice(charsPerTick);
+      displayedRef.current += toShow;
 
-        const current = displayedRef.current;
-        const id = streamingIdRef.current;
-        if (id) {
-          setMessages(prev => {
-            const idx = prev.findIndex(m => m.id === id);
-            if (idx === -1) return prev;
-            const updated = [...prev];
-            updated[idx] = { ...prev[idx], content: current };
-            return updated;
-          });
-        }
+      const current = displayedRef.current;
+      const id = streamingIdRef.current;
+      if (id) {
+        setMessages(prev => {
+          const idx = prev.findIndex(m => m.id === id);
+          if (idx === -1) return prev;
+          const updated = [...prev];
+          updated[idx] = { ...prev[idx], content: current };
+          return updated;
+        });
       }
-
-      if (streamingIdRef.current === aid) {
-        rafRef.current = requestAnimationFrame(tick);
-      }
-    };
-
-    rafRef.current = requestAnimationFrame(tick);
+    }, 25);
   }, []);
 
   const stopTypewriter = useCallback(() => {
-    // flush 剩余
+    // flush 剩余缓冲
     if (bufferRef.current.length > 0) {
       displayedRef.current += bufferRef.current;
       bufferRef.current = '';
@@ -363,7 +496,10 @@ function Chat({ onBack, dark, setDark }: { onBack: () => void; dark: boolean; se
       }
     }
     streamingIdRef.current = null;
-    if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+    if (timerRef.current !== null) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
   }, []);
 
   // ── 发送消息 ──
@@ -428,17 +564,18 @@ function Chat({ onBack, dark, setDark }: { onBack: () => void; dark: boolean; se
   }, [streaming, scrollToBottom, startTypewriter, stopTypewriter]);
 
   useEffect(() => {
-    return () => { if (rafRef.current !== null) cancelAnimationFrame(rafRef.current); };
+    return () => { if (timerRef.current !== null) clearInterval(timerRef.current); };
   }, []);
 
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input); }
   };
 
+  // ── 示例建议：更自然、实用 ──
   const suggestions = [
-    { icon: Code2, label: '写代码', prompt: '用 Python 写一个快速排序，加上注释' },
-    { icon: Pencil, label: '写文章', prompt: '写一段 200 字的科幻微小说' },
-    { icon: Sparkles, label: '问问题', prompt: 'Rust 和 Go 的主要区别是什么？' },
+    { icon: Code2, label: 'Python 快排算法', prompt: '用 Python 写一个快速排序算法，加上详细注释' },
+    { icon: Sparkles, label: '解释 Rust 所有权', prompt: '用通俗易懂的方式解释 Rust 的所有权机制' },
+    { icon: Fish, label: '今天有什么新闻', prompt: '今天有什么值得关注的科技新闻？' },
   ];
 
   return (
