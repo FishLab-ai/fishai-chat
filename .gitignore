@@ -53,3 +53,9 @@ server.log
 # Skills directory
 /skills/tool-results/
 tool-results/
+
+# fishai-engine is a separate repo
+fishai-engine/
+
+# Download directory - never commit
+download/
