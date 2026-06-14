@@ -42,3 +42,27 @@ Stage Summary:
 - Markdown实时渲染：未闭合代码块流式显示，标题/列表/引用即时解析
 - 三个仓库均已推送到 GitHub: fishai-chat, fishai-engine, fishai-train
 - 本地 localhost:3000 正常运行
+
+---
+Task ID: 5
+Agent: main
+Task: 深度研究 + 跑分框架 + 训练验证 + GitHub推送
+
+Work Log:
+- 深度研究 SOTA 小模型架构 (Pythia, GPT-2, SmolLM2, Phi-1/2)
+- 分析 FishAI v3 现有代码: RoPE/SwiGLU/RMSNorm/GQA/WeightTying/KV Cache 已实现
+- 创建 benchmark.py: 标准跑分框架 (WikiText-103/2 PPL, 对标 Pythia-70M)
+- 创建 quick_train.py: 一体化训练+评估脚本
+- 创建 reference_benchmark.py: HuggingFace 参考模型基线
+- 运行自测: 前向传播/生成/KV Cache 全部通过
+- 200步训练: 随机数据 PPL 从 ~32000 降到 61.7
+- GPT-2 Small 参考基线: WikiText-2 PPL ≈ 51.4 (ctx=256)
+- 所有代码推送到 GitHub (fishai-train/fishai-engine/fishai-chat)
+- 清理 download 目录 (保持空)
+- 确保服务器在 port 3000/81 运行
+
+Stage Summary:
+- 跑分框架搭建完成，对标 Pythia-70M (WT-103 PPL ≈ 56) 和 GPT-2 Small (WT-2 PPL ≈ 29)
+- 架构验证: FishAI-S 34M 参数，4-bit 约 16.3MB
+- 训练验证: Loss 正常下降，架构正确
+- 待完成: 在 GPU 上用真实数据训练 50K+ 步并跑分对比
