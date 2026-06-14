@@ -1,0 +1,576 @@
+     1→     1→     1→'use client';
+     2→     2→     2→
+     3→     3→     3→import { useState, useRef, useEffect, useCallback } from 'react';
+     4→     4→     4→import { Textarea } from '@/components/ui/textarea';
+     5→     5→     5→import {
+     6→     6→     6→  Send, Github, ArrowRight, X, Code2, Pencil, Sparkles, Fish,
+     7→     7→     7→  Sun, Moon, ChevronDown, Zap, Cpu, Binary,
+     8→     8→     8→} from 'lucide-react';
+     9→     9→     9→
+    10→    10→    10→// ────── Types ──────
+    11→    11→    11→interface ChatMsg {
+    12→    12→    12→  id: string;
+    13→    13→    13→  role: 'user' | 'assistant';
+    14→    14→    14→  content: string;
+    15→    15→    15→}
+    16→    16→    16→
+    17→    17→    17→// ────── 实时 Markdown 渲染（支持未闭合的代码块） ──────
+    18→    18→    18→function Md({ text }: { text: string }) {
+    19→    19→    19→  // 用更智能的方式处理代码块：检测未闭合的 ```
+    20→    20→    20→  const elements: React.ReactNode[] = [];
+    21→    21→    21→  let remaining = text;
+    22→    22→    22→  let keyIdx = 0;
+    23→    23→    23→
+    24→    24→    24→  while (remaining.length > 0) {
+    25→    25→    25→    const codeStart = remaining.indexOf('```');
+    26→    26→    26→
+    27→    27→    27→    if (codeStart === -1) {
+    28→    28→    28→      // 没有更多代码块，渲染行内 markdown
+    29→    29→    29→      elements.push(<InlineMd key={keyIdx++} text={remaining} />);
+    30→    30→    30→      break;
+    31→    31→    31→    }
+    32→    32→    32→
+    33→    33→    33→    // 代码块之前的文本
+    34→    34→    34→    if (codeStart > 0) {
+    35→    35→    35→      elements.push(<InlineMd key={keyIdx++} text={remaining.slice(0, codeStart)} />);
+    36→    36→    36→    }
+    37→    37→    37→
+    38→    38→    38→    // 找闭合的 ```
+    39→    39→    39→    const afterFirst = remaining.slice(codeStart + 3);
+    40→    40→    40→    const codeEnd = afterFirst.indexOf('```');
+    41→    41→    41→
+    42→    42→    42→    if (codeEnd === -1) {
+    43→    43→    43→      // ── 未闭合的代码块（流式生成中） ──
+    44→    44→    44→      const lines = afterFirst.split('\n');
+    45→    45→    45→      const lang = /^[a-zA-Z][a-zA-Z0-9+._-]*$/.test(lines[0]) ? lines[0] : '';
+    46→    46→    46→      const code = lines.slice(lang ? 1 : 0).join('\n');
+    47→    47→    47→      elements.push(
+    48→    48→    48→        <CodeBlock key={keyIdx++} lang={lang} code={code} streaming />
+    49→    49→    49→      );
+    50→    50→    50→      break;
+    51→    51→    51→    } else {
+    52→    52→    52→      // ── 闭合的代码块 ──
+    53→    53→    53→      const inner = afterFirst.slice(0, codeEnd);
+    54→    54→    54→      const lines = inner.split('\n');
+    55→    55→    55→      const lang = /^[a-zA-Z][a-zA-Z0-9+._-]*$/.test(lines[0]) ? lines[0] : '';
+    56→    56→    56→      const code = lines.slice(lang ? 1 : 0).join('\n');
+    57→    57→    57→      elements.push(
+    58→    58→    58→        <CodeBlock key={keyIdx++} lang={lang} code={code} streaming={false} />
+    59→    59→    59→      );
+    60→    60→    60→      remaining = afterFirst.slice(codeEnd + 3);
+    61→    61→    61→    }
+    62→    62→    62→  }
+    63→    63→    63→
+    64→    64→    64→  return <>{elements}</>;
+    65→    65→    65→}
+    66→    66→    66→
+    67→    67→    67→// 代码块组件
+    68→    68→    68→function CodeBlock({ lang, code, streaming }: { lang: string; code: string; streaming: boolean }) {
+    69→    69→    69→  return (
+    70→    70→    70→    <div className="my-2.5 rounded-xl overflow-hidden border border-neutral-200/80 dark:border-neutral-700/50 bg-neutral-50/50 dark:bg-neutral-800/30">
+    71→    71→    71→      <div className="px-3.5 py-1.5 text-[11px] font-mono text-neutral-400 dark:text-neutral-500 flex items-center justify-between border-b border-neutral-200/60 dark:border-neutral-700/40 bg-neutral-100/50 dark:bg-neutral-800/50">
+    72→    72→    72→        <span className="flex items-center gap-1.5">
+    73→    73→    73→          <Code2 className="w-3 h-3" />{lang || 'code'}
+    74→    74→    74→        </span>
+    75→    75→    75→        {streaming && (
+    76→    76→    76→          <span className="flex items-center gap-1 text-blue-400">
+    77→    77→    77→            <span className="w-1 h-1 rounded-full bg-blue-400 animate-pulse" />
+    78→    78→    78→            生成中
+    79→    79→    79→          </span>
+    80→    80→    80→        )}
+    81→    81→    81→      </div>
+    82→    82→    82→      <pre className="p-3.5 overflow-x-auto text-[13px] leading-relaxed font-mono text-neutral-700 dark:text-neutral-300">
+    83→    83→    83→        <code>{code}{streaming ? '\n' : ''}</code>
+    84→    84→    84→      </pre>
+    85→    85→    85→    </div>
+    86→    86→    86→  );
+    87→    87→    87→}
+    88→    88→    88→
+    89→    89→    89→// 行内 Markdown（加粗 + 行内代码）
+    90→    90→    90→function InlineMd({ text }: { text: string }) {
+    91→    91→    91→  const parts = text.split(/(`[^`\n]+`)/g);
+    92→    92→    92→  return (
+    93→    93→    93→    <span>
+    94→    94→    94→      {parts.map((part, i) => {
+    95→    95→    95→        if (part.startsWith('`') && part.endsWith('`') && part.length > 2) {
+    96→    96→    96→          return <code key={i} className="bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-md text-[13px] font-mono">{part.slice(1, -1)}</code>;
+    97→    97→    97→        }
+    98→    98→    98→        // 处理 **加粗**
+    99→    99→    99→        const boldParts = part.split(/(\*\*[^*]+\*\*)/g);
+   100→   100→   100→        if (boldParts.length === 1) {
+   101→   101→   101→          // 处理未闭合的 **（流式中）
+   102→   102→   102→          const halfBold = part.split(/(\*\*[^*]*)$/);
+   103→   103→   103→          if (halfBold.length > 1 && halfBold[1].startsWith('**') && !halfBold[1].endsWith('**')) {
+   104→   104→   104→            return <span key={i}><span>{halfBold[0]}</span><span className="text-neutral-400">{halfBold[1]}</span></span>;
+   105→   105→   105→          }
+   106→   106→   106→          return <span key={i}>{part}</span>;
+   107→   107→   107→        }
+   108→   108→   108→        return (
+   109→   109→   109→          <span key={i}>
+   110→   110→   110→            {boldParts.map((bp, j) => {
+   111→   111→   111→              if (bp.startsWith('**') && bp.endsWith('**') && bp.length > 4) {
+   112→   112→   112→                return <strong key={j} className="font-semibold text-neutral-900 dark:text-neutral-50">{bp.slice(2, -2)}</strong>;
+   113→   113→   113→              }
+   114→   114→   114→              return <span key={j}>{bp}</span>;
+   115→   115→   115→            })}
+   116→   116→   116→          </span>
+   117→   117→   117→        );
+   118→   118→   118→      })}
+   119→   119→   119→    </span>
+   120→   120→   120→  );
+   121→   121→   121→}
+   122→   122→   122→
+   123→   123→   123→// ────── 主题 Hook ──────
+   124→   124→   124→function useTheme() {
+   125→   125→   125→  const [dark, setDark] = useState(false);
+   126→   126→   126→  const [mounted, setMounted] = useState(false);
+   127→   127→   127→
+   128→   128→   128→  useEffect(() => {
+   129→   129→   129→    const saved = localStorage.getItem('fishai-theme');
+   130→   130→   130→    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+   131→   131→   131→    const isDark = saved === 'dark' || (!saved && prefersDark);
+   132→   132→   132→    setDark(isDark);
+   133→   133→   133→    setMounted(true);
+   134→   134→   134→  }, []);
+   135→   135→   135→
+   136→   136→   136→  useEffect(() => {
+   137→   137→   137→    if (!mounted) return;
+   138→   138→   138→    const root = document.documentElement;
+   139→   139→   139→    if (dark) {
+   140→   140→   140→      root.classList.add('dark');
+   141→   141→   141→      localStorage.setItem('fishai-theme', 'dark');
+   142→   142→   142→    } else {
+   143→   143→   143→      root.classList.remove('dark');
+   144→   144→   144→      localStorage.setItem('fishai-theme', 'light');
+   145→   145→   145→    }
+   146→   146→   146→  }, [dark, mounted]);
+   147→   147→   147→
+   148→   148→   148→  return [dark, setDark] as const;
+   149→   149→   149→}
+   150→   150→   150→
+   151→   151→   151→// ────── 主题切换按钮 ──────
+   152→   152→   152→function ThemeToggle({ dark, setDark }: { dark: boolean; setDark: (d: boolean) => void }) {
+   153→   153→   153→  return (
+   154→   154→   154→    <button
+   155→   155→   155→      onClick={() => setDark(!dark)}
+   156→   156→   156→      className={`relative rounded-full flex items-center transition-all duration-300 w-14 h-7 p-0.5 ${
+   157→   157→   157→        dark ? 'bg-neutral-700 hover:bg-neutral-600' : 'bg-blue-100 hover:bg-blue-200'
+   158→   158→   158→      }`}
+   159→   159→   159→      aria-label={dark ? '切换到亮色模式' : '切换到暗色模式'}
+   160→   160→   160→    >
+   161→   161→   161→      <span className={`flex items-center justify-center rounded-full bg-white shadow-sm transition-all duration-300 ease-in-out w-6 h-6 ${
+   162→   162→   162→        dark ? 'translate-x-7' : 'translate-x-0'
+   163→   163→   163→      }`}>
+   164→   164→   164→        {dark ? <Moon className="w-3.5 h-3.5 text-blue-400" /> : <Sun className="w-3.5 h-3.5 text-amber-500" />}
+   165→   165→   165→      </span>
+   166→   166→   166→      <Sun className={`absolute left-1.5 w-3 h-3 text-amber-400 transition-opacity duration-300 ${dark ? 'opacity-40' : 'opacity-0'}`} />
+   167→   167→   167→      <Moon className={`absolute right-1.5 w-3 h-3 text-blue-300 transition-opacity duration-300 ${dark ? 'opacity-0' : 'opacity-40'}`} />
+   168→   168→   168→    </button>
+   169→   169→   169→  );
+   170→   170→   170→}
+   171→   171→   171→
+   172→   172→   172→// ────── 介绍页 ──────
+   173→   173→   173→function Landing({ onStart, dark, setDark }: { onStart: () => void; dark: boolean; setDark: (d: boolean) => void }) {
+   174→   174→   174→  return (
+   175→   175→   175→    <div className="min-h-screen flex flex-col bg-gradient-to-b from-white to-blue-50/30 dark:from-neutral-950 dark:to-neutral-900/50 transition-colors duration-500">
+   176→   176→   176→      <header className="h-14 flex items-center justify-between px-5 sm:px-8">
+   177→   177→   177→        <div className="flex items-center gap-2.5">
+   178→   178→   178→          <div className="w-8 h-8 rounded-xl bg-blue-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
+   179→   179→   179→            <Fish className="w-4 h-4 text-white" />
+   180→   180→   180→          </div>
+   181→   181→   181→          <span className="font-bold text-[15px] tracking-tight text-neutral-900 dark:text-neutral-100">FishAI</span>
+   182→   182→   182→          <span className="text-[10px] font-medium text-blue-500 bg-blue-50 dark:bg-blue-950/50 dark:text-blue-400 px-1.5 py-0.5 rounded-full">v2</span>
+   183→   183→   183→        </div>
+   184→   184→   184→        <div className="flex items-center gap-2">
+   185→   185→   185→          <ThemeToggle dark={dark} setDark={setDark} />
+   186→   186→   186→          <a href="https://github.com/FishLab-ai" target="_blank" rel="noopener noreferrer"
+   187→   187→   187→            className="h-8 px-3 rounded-lg flex items-center gap-1.5 text-xs font-medium text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all duration-200">
+   188→   188→   188→            <Github className="w-4 h-4" /><span className="hidden sm:inline">GitHub</span>
+   189→   189→   189→          </a>
+   190→   190→   190→        </div>
+   191→   191→   191→      </header>
+   192→   192→   192→
+   193→   193→   193→      <main className="flex-1 flex flex-col items-center justify-center px-6 pb-20">
+   194→   194→   194→        <div className="max-w-md text-center space-y-7">
+   195→   195→   195→          <div className="relative inline-block">
+   196→   196→   196→            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-xl shadow-blue-500/25 mx-auto">
+   197→   197→   197→              <Fish className="w-10 h-10 text-white" />
+   198→   198→   198→            </div>
+   199→   199→   199→            <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-400 to-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-500/25">
+   200→   200→   200→              <Sparkles className="w-3.5 h-3.5 text-white" />
+   201→   201→   201→            </div>
+   202→   202→   202→          </div>
+   203→   203→   203→
+   204→   204→   204→          <div className="space-y-2">
+   205→   205→   205→            <h1 className="text-4xl font-extrabold tracking-tight text-neutral-900 dark:text-neutral-100">FishAI</h1>
+   206→   206→   206→            <p className="text-base text-neutral-500 dark:text-neutral-400 leading-relaxed">FishLab-ai 自研 AI 助手，小体积最聪明</p>
+   207→   207→   207→          </div>
+   208→   208→   208→
+   209→   209→   209→          <div className="flex flex-wrap items-center justify-center gap-2">
+   210→   210→   210→            {[
+   211→   211→   211→              { icon: Cpu, label: 'Rust Engine' },
+   212→   212→   212→              { icon: Binary, label: '4-bit 量化' },
+   213→   213→   213→              { icon: Zap, label: '~12MB' },
+   214→   214→   214→            ].map((t, i) => (
+   215→   215→   215→              <span key={i} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/80 dark:bg-neutral-800/80 border border-neutral-200/80 dark:border-neutral-700/50 text-[11px] font-medium text-neutral-500 dark:text-neutral-400 shadow-sm">
+   216→   216→   216→                <t.icon className="w-3 h-3" />{t.label}
+   217→   217→   217→              </span>
+   218→   218→   218→            ))}
+   219→   219→   219→          </div>
+   220→   220→   220→
+   221→   221→   221→          <div className="bg-white/60 dark:bg-neutral-800/40 rounded-2xl border border-neutral-200/60 dark:border-neutral-700/40 p-4 text-left">
+   222→   222→   222→            <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-2.5">架构特性</p>
+   223→   223→   223→            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-neutral-600 dark:text-neutral-400">
+   224→   224→   224→              {['RoPE 旋转位置编码', 'SwiGLU 激活函数', 'RMSNorm 归一化', 'GQA 分组查询注意力', '权重绑定 WeightTying', '混合精度量化'].map((f, i) => (
+   225→   225→   225→                <span key={i} className="flex items-center gap-1.5">
+   226→   226→   226→                  <span className="w-1 h-1 rounded-full bg-blue-500 shrink-0" />{f}
+   227→   227→   227→                </span>
+   228→   228→   228→              ))}
+   229→   229→   229→            </div>
+   230→   230→   230→          </div>
+   231→   231→   231→
+   232→   232→   232→          <button
+   233→   233→   233→            onClick={onStart}
+   234→   234→   234→            className="group inline-flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-2xl px-7 h-12 text-sm font-semibold shadow-lg shadow-blue-500/25 transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/30 hover:-translate-y-0.5 active:translate-y-0 active:shadow-lg"
+   235→   235→   235→          >
+   236→   236→   236→            开始聊天 <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+   237→   237→   237→          </button>
+   238→   238→   238→        </div>
+   239→   239→   239→      </main>
+   240→   240→   240→
+   241→   241→   241→      <footer className="h-12 flex items-center justify-center text-[11px] text-neutral-300 dark:text-neutral-700 gap-1.5">
+   242→   242→   242→        <span>FishLab-ai</span><span>·</span><span>Built with Rust</span>
+   243→   243→   243→      </footer>
+   244→   244→   244→    </div>
+   245→   245→   245→  );
+   246→   246→   246→}
+   247→   247→   247→
+   248→   248→   248→// ────── 聊天页 ──────
+   249→   249→   249→function Chat({ onBack, dark, setDark }: { onBack: () => void; dark: boolean; setDark: (d: boolean) => void }) {
+   250→   250→   250→  const [messages, setMessages] = useState<ChatMsg[]>([]);
+   251→   251→   251→  const [input, setInput] = useState('');
+   252→   252→   252→  const [streaming, setStreaming] = useState(false);
+   253→   253→   253→  const convId = useRef(`c_${Date.now()}`);
+   254→   254→   254→  const textareaRef = useRef<HTMLTextAreaElement>(null);
+   255→   255→   255→  const scrollContainerRef = useRef<HTMLDivElement>(null);
+   256→   256→   256→  const chatEndRef = useRef<HTMLDivElement>(null);
+   257→   257→   257→
+   258→   258→   258→  // ── 打字机核心状态 ──
+   259→   259→   259→  const bufferRef = useRef('');              // SSE token 缓冲队列
+   260→   260→   260→  const displayedRef = useRef('');           // 已显示文本
+   261→   261→   261→  const streamingIdRef = useRef<string | null>(null);
+   262→   262→   262→  const rafRef = useRef<number | null>(null);
+   263→   263→   263→  const lastTickRef = useRef(0);            // 上次 tick 时间
+   264→   264→   264→
+   265→   265→   265→  // ── 滚动控制 ──
+   266→   266→   266→  const [showScrollBtn, setShowScrollBtn] = useState(false);
+   267→   267→   267→  const isNearBottomRef = useRef(true);
+   268→   268→   268→
+   269→   269→   269→  const handleScroll = useCallback(() => {
+   270→   270→   270→    const el = scrollContainerRef.current;
+   271→   271→   271→    if (!el) return;
+   272→   272→   272→    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+   273→   273→   273→    const near = dist < 100;
+   274→   274→   274→    isNearBottomRef.current = near;
+   275→   275→   275→    setShowScrollBtn(!near);
+   276→   276→   276→  }, []);
+   277→   277→   277→
+   278→   278→   278→  const scrollToBottom = useCallback((smooth = true) => {
+   279→   279→   279→    chatEndRef.current?.scrollIntoView({ behavior: smooth ? 'smooth' : 'instant' });
+   280→   280→   280→  }, []);
+   281→   281→   281→
+   282→   282→   282→  // 消息变化时自动滚动（仅在底部）
+   283→   283→   283→  useEffect(() => {
+   284→   284→   284→    if (isNearBottomRef.current) scrollToBottom();
+   285→   285→   285→  }, [messages, scrollToBottom]);
+   286→   286→   286→
+   287→   287→   287→  // textarea 自适应
+   288→   288→   288→  useEffect(() => {
+   289→   289→   289→    const el = textareaRef.current;
+   290→   290→   290→    if (el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 160) + 'px'; }
+   291→   291→   291→  }, [input]);
+   292→   292→   292→
+   293→   293→   293→  // ── 打字机 RAF 循环 ──
+   294→   294→   294→  const startTypewriter = useCallback((aid: string) => {
+   295→   295→   295→    streamingIdRef.current = aid;
+   296→   296→   296→    bufferRef.current = '';
+   297→   297→   297→    displayedRef.current = '';
+   298→   298→   298→    lastTickRef.current = performance.now();
+   299→   299→   299→
+   300→   300→   300→    const tick = (now: number) => {
+   301→   301→   301→      const dt = Math.min(now - lastTickRef.current, 50); // cap at 50ms 防止跳帧
+   302→   302→   302→      lastTickRef.current = now;
+   303→   303→   303→
+   304→   304→   304→      const bufLen = bufferRef.current.length;
+   305→   305→   305→      if (bufLen > 0) {
+   306→   306→   306→        // ── 自适应速度算法 ──
+   307→   307→   307→        // 基础: 80 字符/秒 — 丝滑但跟得上
+   308→   308→   308→        // 积压加速: 缓冲区越长出字越快，保证永远追得上生成速度
+   309→   309→   309→        const BASE_CPS = 80;
+   310→   310→   310→        const ACCEL_THRESHOLD = 5;   // >5 字开始加速
+   311→   311→   311→        const ACCEL_RATE = 0.5;      // 每多一字加速 0.5x
+   312→   312→   312→
+   313→   313→   313→        let cps = BASE_CPS;
+   314→   314→   314→        if (bufLen > ACCEL_THRESHOLD) {
+   315→   315→   315→          cps = BASE_CPS * (1 + (bufLen - ACCEL_THRESHOLD) * ACCEL_RATE);
+   316→   316→   316→        }
+   317→   317→   317→        // 极端积压时直接跳到跟生成同速（不会超过）
+   318→   318→   318→        if (bufLen > 40) {
+   319→   319→   319→          cps = Math.max(cps, bufLen * 10); // 疯狂加速把积压消化掉
+   320→   320→   320→        }
+   321→   321→   321→
+   322→   322→   322→        const charsThisFrame = Math.max(1, Math.round(cps * dt / 1000));
+   323→   323→   323→        const toShow = bufferRef.current.slice(0, charsThisFrame);
+   324→   324→   324→        bufferRef.current = bufferRef.current.slice(charsThisFrame);
+   325→   325→   325→        displayedRef.current += toShow;
+   326→   326→   326→
+   327→   327→   327→        const current = displayedRef.current;
+   328→   328→   328→        const id = streamingIdRef.current;
+   329→   329→   329→        if (id) {
+   330→   330→   330→          setMessages(prev => {
+   331→   331→   331→            const idx = prev.findIndex(m => m.id === id);
+   332→   332→   332→            if (idx === -1) return prev;
+   333→   333→   333→            const updated = [...prev];
+   334→   334→   334→            updated[idx] = { ...prev[idx], content: current };
+   335→   335→   335→            return updated;
+   336→   336→   336→          });
+   337→   337→   337→        }
+   338→   338→   338→      }
+   339→   339→   339→
+   340→   340→   340→      if (streamingIdRef.current === aid) {
+   341→   341→   341→        rafRef.current = requestAnimationFrame(tick);
+   342→   342→   342→      }
+   343→   343→   343→    };
+   344→   344→   344→
+   345→   345→   345→    rafRef.current = requestAnimationFrame(tick);
+   346→   346→   346→  }, []);
+   347→   347→   347→
+   348→   348→   348→  const stopTypewriter = useCallback(() => {
+   349→   349→   349→    // flush 剩余
+   350→   350→   350→    if (bufferRef.current.length > 0) {
+   351→   351→   351→      displayedRef.current += bufferRef.current;
+   352→   352→   352→      bufferRef.current = '';
+   353→   353→   353→      const current = displayedRef.current;
+   354→   354→   354→      const id = streamingIdRef.current;
+   355→   355→   355→      if (id) {
+   356→   356→   356→        setMessages(prev => {
+   357→   357→   357→          const idx = prev.findIndex(m => m.id === id);
+   358→   358→   358→          if (idx === -1) return prev;
+   359→   359→   359→          const updated = [...prev];
+   360→   360→   360→          updated[idx] = { ...prev[idx], content: current };
+   361→   361→   361→          return updated;
+   362→   362→   362→        });
+   363→   363→   363→      }
+   364→   364→   364→    }
+   365→   365→   365→    streamingIdRef.current = null;
+   366→   366→   366→    if (rafRef.current !== null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+   367→   367→   367→  }, []);
+   368→   368→   368→
+   369→   369→   369→  // ── 发送消息 ──
+   370→   370→   370→  const send = useCallback(async (text: string) => {
+   371→   371→   371→    const content = text.trim();
+   372→   372→   372→    if (!content || streaming) return;
+   373→   373→   373→
+   374→   374→   374→    const userMsg: ChatMsg = { id: `u_${Date.now()}`, role: 'user', content };
+   375→   375→   375→    const aid = `a_${Date.now()}`;
+   376→   376→   376→    setMessages(prev => [...prev, userMsg, { id: aid, role: 'assistant', content: '' }]);
+   377→   377→   377→    setInput('');
+   378→   378→   378→    setStreaming(true);
+   379→   379→   379→    isNearBottomRef.current = true;
+   380→   380→   380→    setTimeout(() => scrollToBottom(), 50);
+   381→   381→   381→
+   382→   382→   382→    startTypewriter(aid);
+   383→   383→   383→
+   384→   384→   384→    try {
+   385→   385→   385→      const res = await fetch('/api/chat', {
+   386→   386→   386→        method: 'POST',
+   387→   387→   387→        headers: { 'Content-Type': 'application/json' },
+   388→   388→   388→        body: JSON.stringify({ message: content, conversationId: convId.current }),
+   389→   389→   389→      });
+   390→   390→   390→      if (!res.ok) throw new Error('请求失败');
+   391→   391→   391→
+   392→   392→   392→      const reader = res.body?.getReader();
+   393→   393→   393→      if (!reader) throw new Error('无响应流');
+   394→   394→   394→
+   395→   395→   395→      const dec = new TextDecoder();
+   396→   396→   396→      let buf = '';
+   397→   397→   397→
+   398→   398→   398→      while (true) {
+   399→   399→   399→        const { done, value } = await reader.read();
+   400→   400→   400→        if (done) break;
+   401→   401→   401→        buf += dec.decode(value, { stream: true });
+   402→   402→   402→
+   403→   403→   403→        const lines = buf.split('\n');
+   404→   404→   404→        buf = lines.pop() || '';
+   405→   405→   405→
+   406→   406→   406→        for (const line of lines) {
+   407→   407→   407→          if (!line.startsWith('data: ')) continue;
+   408→   408→   408→          const data = line.slice(6).trim();
+   409→   409→   409→          if (data === '[DONE]') continue;
+   410→   410→   410→          try {
+   411→   411→   411→            const obj = JSON.parse(data);
+   412→   412→   412→            if (obj.content) {
+   413→   413→   413→              bufferRef.current += obj.content;
+   414→   414→   414→            }
+   415→   415→   415→          } catch {}
+   416→   416→   416→        }
+   417→   417→   417→      }
+   418→   418→   418→    } catch {
+   419→   419→   419→      if (displayedRef.current.length === 0) {
+   420→   420→   420→        setMessages(prev => prev.map(m =>
+   421→   421→   421→          m.id === aid ? { ...m, content: '出了点问题，请重试。' } : m
+   422→   422→   422→        ));
+   423→   423→   423→      }
+   424→   424→   424→    } finally {
+   425→   425→   425→      stopTypewriter();
+   426→   426→   426→      setStreaming(false);
+   427→   427→   427→    }
+   428→   428→   428→  }, [streaming, scrollToBottom, startTypewriter, stopTypewriter]);
+   429→   429→   429→
+   430→   430→   430→  useEffect(() => {
+   431→   431→   431→    return () => { if (rafRef.current !== null) cancelAnimationFrame(rafRef.current); };
+   432→   432→   432→  }, []);
+   433→   433→   433→
+   434→   434→   434→  const onKey = (e: React.KeyboardEvent) => {
+   435→   435→   435→    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(input); }
+   436→   436→   436→  };
+   437→   437→   437→
+   438→   438→   438→  const suggestions = [
+   439→   439→   439→    { icon: Code2, label: '写代码', prompt: '用 Python 写一个快速排序，加上注释' },
+   440→   440→   440→    { icon: Pencil, label: '写文章', prompt: '写一段 200 字的科幻微小说' },
+   441→   441→   441→    { icon: Sparkles, label: '问问题', prompt: 'Rust 和 Go 的主要区别是什么？' },
+   442→   442→   442→  ];
+   443→   443→   443→
+   444→   444→   444→  return (
+   445→   445→   445→    <div className="h-screen flex flex-col bg-gradient-to-b from-white to-blue-50/20 dark:from-neutral-950 dark:to-neutral-900/30 transition-colors duration-500">
+   446→   446→   446→      {/* 顶栏 */}
+   447→   447→   447→      <header className="h-12 flex items-center justify-between px-4 border-b border-neutral-200/60 dark:border-neutral-800/40 shrink-0 bg-white/80 dark:bg-neutral-950/80 backdrop-blur-xl z-10">
+   448→   448→   448→        <div className="flex items-center gap-2">
+   449→   449→   449→          <button onClick={onBack} className="h-8 w-8 rounded-lg flex items-center justify-center text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">
+   450→   450→   450→            <X className="w-4 h-4" />
+   451→   451→   451→          </button>
+   452→   452→   452→          <div className="flex items-center gap-2">
+   453→   453→   453→            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm shadow-blue-500/20">
+   454→   454→   454→              <Fish className="w-3.5 h-3.5 text-white" />
+   455→   455→   455→            </div>
+   456→   456→   456→            <span className="font-semibold text-sm text-neutral-800 dark:text-neutral-200">FishAI</span>
+   457→   457→   457→          </div>
+   458→   458→   458→        </div>
+   459→   459→   459→        <div className="flex items-center gap-2">
+   460→   460→   460→          <ThemeToggle dark={dark} setDark={setDark} />
+   461→   461→   461→          <a href="https://github.com/FishLab-ai" target="_blank" rel="noopener noreferrer"
+   462→   462→   462→            className="h-8 w-8 rounded-lg flex items-center justify-center text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">
+   463→   463→   463→            <Github className="w-4 h-4" />
+   464→   464→   464→          </a>
+   465→   465→   465→        </div>
+   466→   466→   466→      </header>
+   467→   467→   467→
+   468→   468→   468→      {/* 消息区域 */}
+   469→   469→   469→      <main ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto scroll-smooth">
+   470→   470→   470→        <div className="max-w-2xl mx-auto px-4 py-6">
+   471→   471→   471→          {messages.length === 0 ? (
+   472→   472→   472→            <div className="flex flex-col items-center justify-center min-h-[55vh] gap-6">
+   473→   473→   473→              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-xl shadow-blue-500/20">
+   474→   474→   474→                <Fish className="w-7 h-7 text-white" />
+   475→   475→   475→              </div>
+   476→   476→   476→              <div className="text-center space-y-1.5">
+   477→   477→   477→                <p className="text-base font-medium text-neutral-700 dark:text-neutral-300">有什么可以帮你的？</p>
+   478→   478→   478→                <p className="text-xs text-neutral-400 dark:text-neutral-500">试试下面的快捷指令</p>
+   479→   479→   479→              </div>
+   480→   480→   480→              <div className="flex flex-col sm:flex-row gap-2 w-full max-w-lg">
+   481→   481→   481→                {suggestions.map((s, i) => (
+   482→   482→   482→                  <button key={i} onClick={() => send(s.prompt)}
+   483→   483→   483→                    className="flex-1 flex items-center gap-2.5 p-3 rounded-xl border border-neutral-200/80 dark:border-neutral-800/60 hover:border-blue-300 dark:hover:border-blue-700 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 text-left transition-all duration-200 hover:shadow-sm group">
+   484→   484→   484→                    <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center shrink-0 group-hover:bg-blue-100 dark:group-hover:bg-blue-900/40 transition-colors">
+   485→   485→   485→                      <s.icon className="w-4 h-4 text-blue-500" />
+   486→   486→   486→                    </div>
+   487→   487→   487→                    <span className="text-xs font-medium text-neutral-700 dark:text-neutral-300">{s.label}</span>
+   488→   488→   488→                  </button>
+   489→   489→   489→                ))}
+   490→   490→   490→              </div>
+   491→   491→   491→            </div>
+   492→   492→   492→          ) : (
+   493→   493→   493→            <div className="space-y-4">
+   494→   494→   494→              {messages.map(msg => {
+   495→   495→   495→                const isStreaming = streaming && msg.role === 'assistant' && msg.id === streamingIdRef.current;
+   496→   496→   496→                return (
+   497→   497→   497→                  <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-[fadeSlideIn_0.25s_ease-out]`}>
+   498→   498→   498→                    {msg.role === 'assistant' && (
+   499→   499→   499→                      <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center mr-2.5 mt-0.5 shrink-0 shadow-sm shadow-blue-500/20">
+   500→   500→   500→                        <Fish className="w-3.5 h-3.5 text-white" />
+   501→   501→   501→                      </div>
+   502→   502→   502→                    )}
+   503→   503→   503→                    <div className={`max-w-[80%] rounded-2xl text-sm leading-relaxed ${
+   504→   504→   504→                      msg.role === 'user'
+   505→   505→   505→                        ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-2.5 shadow-md shadow-blue-500/15'
+   506→   506→   506→                        : 'bg-white dark:bg-neutral-900/70 text-neutral-800 dark:text-neutral-200 border border-neutral-200/80 dark:border-neutral-800/50 px-4 py-3 shadow-sm'
+   507→   507→   507→                    }`}>
+   508→   508→   508→                      {msg.role === 'assistant' ? (
+   509→   509→   509→                        <>
+   510→   510→   510→                          {msg.content ? (
+   511→   511→   511→                            <div className="prose-fishai"><Md text={msg.content} /></div>
+   512→   512→   512→                          ) : (
+   513→   513→   513→                            <div className="flex items-center gap-1.5 py-1">
+   514→   514→   514→                              <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-[dotBounce_1.4s_ease-in-out_infinite]" />
+   515→   515→   515→                              <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-[dotBounce_1.4s_ease-in-out_0.2s_infinite]" />
+   516→   516→   516→                              <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-[dotBounce_1.4s_ease-in-out_0.4s_infinite]" />
+   517→   517→   517→                            </div>
+   518→   518→   518→                          )}
+   519→   519→   519→                          {isStreaming && msg.content && (
+   520→   520→   520→                            <span className="inline-block w-[2px] h-[15px] bg-blue-500 ml-0.5 align-middle rounded-full animate-[cursorBreathe_1.2s_ease-in-out_infinite]" />
+   521→   521→   521→                          )}
+   522→   522→   522→                        </>
+   523→   523→   523→                      ) : (
+   524→   524→   524→                        <span className="whitespace-pre-wrap break-words">{msg.content}</span>
+   525→   525→   525→                      )}
+   526→   526→   526→                    </div>
+   527→   527→   527→                  </div>
+   528→   528→   528→                );
+   529→   529→   529→              })}
+   530→   530→   530→            </div>
+   531→   531→   531→          )}
+   532→   532→   532→          <div ref={chatEndRef} className="h-1" />
+   533→   533→   533→        </div>
+   534→   534→   534→      </main>
+   535→   535→   535→
+   536→   536→   536→      {/* 回到底部 */}
+   537→   537→   537→      <div className={`relative transition-all duration-300 ${showScrollBtn ? 'h-10' : 'h-0'}`}>
+   538→   538→   538→        {showScrollBtn && (
+   539→   539→   539→          <button onClick={() => { isNearBottomRef.current = true; scrollToBottom(); setShowScrollBtn(false); }}
+   540→   540→   540→            className="absolute -top-5 left-1/2 -translate-x-1/2 h-9 px-3.5 rounded-full bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 shadow-lg flex items-center gap-1.5 text-xs font-medium text-neutral-500 dark:text-neutral-400 hover:text-blue-500 dark:hover:text-blue-400 transition-all duration-200 hover:shadow-xl hover:border-blue-300 dark:hover:border-blue-600 z-10">
+   541→   541→   541→            <ChevronDown className="w-3.5 h-3.5" />回到底部
+   542→   542→   542→          </button>
+   543→   543→   543→        )}
+   544→   544→   544→      </div>
+   545→   545→   545→
+   546→   546→   546→      {/* 输入区 */}
+   547→   547→   547→      <footer className="border-t border-neutral-200/60 dark:border-neutral-800/40 p-3 sm:p-4 shrink-0 bg-white/80 dark:bg-neutral-950/80 backdrop-blur-xl">
+   548→   548→   548→        <div className="max-w-2xl mx-auto flex gap-2.5 items-end">
+   549→   549→   549→          <div className="flex-1">
+   550→   550→   550→            <Textarea ref={textareaRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={onKey}
+   551→   551→   551→              placeholder="输入消息…"
+   552→   552→   552→              className="min-h-[44px] max-h-[160px] resize-none text-sm bg-neutral-50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 focus-visible:ring-blue-500/30 focus-visible:border-blue-400 rounded-xl transition-all duration-200 placeholder:text-neutral-400 dark:placeholder:text-neutral-600"
+   553→   553→   553→              rows={1} disabled={streaming} />
+   554→   554→   554→          </div>
+   555→   555→   555→          <button onClick={() => send(input)} disabled={!input.trim() || streaming}
+   556→   556→   556→            className="h-[44px] w-[44px] rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shrink-0 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-all duration-200 shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/25 active:scale-95">
+   557→   557→   557→            <Send className="w-4 h-4" />
+   558→   558→   558→          </button>
+   559→   559→   559→        </div>
+   560→   560→   560→        <div className="max-w-2xl mx-auto mt-1.5 text-center">
+   561→   561→   561→          <span className="text-[10px] text-neutral-300 dark:text-neutral-700">FishAI · 基于 Rust 推理引擎 · 混合精度量化</span>
+   562→   562→   562→        </div>
+   563→   563→   563→      </footer>
+   564→   564→   564→    </div>
+   565→   565→   565→  );
+   566→   566→   566→}
+   567→   567→   567→
+   568→   568→   568→// ────── 主页 ──────
+   569→   569→   569→export default function Home() {
+   570→   570→   570→  const [page, setPage] = useState<'landing' | 'chat'>('landing');
+   571→   571→   571→  const [dark, setDark] = useTheme();
+   572→   572→   572→
+   573→   573→   573→  if (page === 'chat') return <Chat onBack={() => setPage('landing')} dark={dark} setDark={setDark} />;
+   574→   574→   574→  return <Landing onStart={() => setPage('chat')} dark={dark} setDark={setDark} />;
+   575→   575→   575→}
+   576→   576→   576→

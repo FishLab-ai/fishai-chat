@@ -1,0 +1,644 @@
+     1→# State-of-the-Art Techniques for Building Sub-100M Parameter Language Models
+     2→
+     3→**Research Date**: March 2026  
+     4→**Focus**: Maximizing intelligence per parameter in models under 100M parameters  
+     5→**Sources**: LLaMA/PaLM/Phi architecture papers, Chinchilla scaling laws, Super Tiny Language Models (arXiv:2405.14159), SLM survey (arXiv:2505.19529), Sebastian Raschka's analyses, EleutherAI RoPE deep-dive, and community benchmarks.
+     6→
+     7→---
+     8→
+     9→## 1. RoPE (Rotary Position Embedding)
+    10→
+    11→### The Core Idea
+    12→RoPE encodes **absolute** position through vector rotation, but the **dot product of rotated vectors naturally depends on relative position**. This unifies absolute and relative position encoding.
+    13→
+    14→### Exact Mathematics
+    15→
+    16→For a token at position `m` with embedding vector `x ∈ ℝ^d`, RoPE applies a **block-diagonal rotation matrix** to pairs of dimensions:
+    17→
+    18→```
+    19→For each dimension pair (2i, 2i+1) where i = 0, 1, ..., d/2-1:
+    20→
+    21→theta_i = 1 / (10000^(2i/d))
+    22→
+    23→     ┌ cos(m * theta_i)  -sin(m * theta_i) ┐
+    24→R =  │                                       │    (2x2 rotation for each pair)
+    25→     └ sin(m * theta_i)   cos(m * theta_i) ┘
+    26→
+    27→Full rotation: R_Theta,m = diag(R(theta_0), R(theta_1), ..., R(theta_{d/2-1}))
+    28→```
+    29→
+    30→Applied to queries and keys:
+    31→```
+    32→q_m = R_Theta,m * W_q * x_m
+    33→k_n = R_Theta,n * W_k * x_n
+    34→```
+    35→
+    36→The attention score:
+    37→```
+    38→q_m^T * k_n = x_m^T * W_q^T * R_Theta,(m-n) * W_k * x_n
+    39→```
+    40→
+    41→**This depends only on the relative position (m-n)**, which is the key mathematical property.
+    42→
+    43→### Efficient Implementation (No Full Matrix Multiply)
+    44→
+    45→```python
+    46→def precompute_freqs_cis(dim: int, max_seq_len: int, theta: float = 10000.0):
+    47→    freqs = 1.0 / (theta ** (torch.arange(0, dim, 2).float() / dim))
+    48→    t = torch.arange(max_seq_len)
+    49→    freqs = torch.outer(t, freqs)  # (max_seq_len, dim/2)
+    50→    freqs_cis = torch.polar(torch.ones_like(freqs), freqs)  # complex exponentials
+    51→    return freqs_cis
+    52→
+    53→def apply_rotary_emb(xq, xk, freqs_cis):
+    54→    # xq, xk: (batch, seq_len, n_heads, head_dim)
+    55→    xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
+    56→    xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
+    57→    freqs_cis = reshape_for_broadcast(freqs_cis, xq_)
+    58→    xq_out = torch.view_as_real(xq_ * freqs_cis).flatten(start_dim=-2)
+    59→    xk_out = torch.view_as_real(xk_ * freqs_cis).flatten(start_dim=-2)
+    60→    return xq_out.type_as(xq), xk_out.type_as(xk)
+    61→```
+    62→
+    63→### Why RoPE > Learned Position Embeddings for Small Models
+    64→
+    65→| Property | Learned PE | RoPE |
+    66→|----------|-----------|------|
+    67→| Parameters | d_model x max_seq_len | **0** (computed on the fly) |
+    68→| Extrapolation | Cannot generalize beyond max_seq_len | Can extrapolate with RoPE scaling |
+    69→| Relative position | Only implicit | **Explicitly encoded** in attention scores |
+    70→| Memory | Stores embedding table | No storage needed |
+    71→
+    72→**For a 100M model with d_model=768 and max_seq_len=2048**: Learned PE costs ~1.57M parameters (1.57% of budget). RoPE costs **zero**. At sub-100M scale, every parameter counts.
+    73→
+    74→### Theta Value
+    75→- Original paper: theta = 10000  
+    76→- LLaMA 1/2/3: theta = 10000  
+    77→- For longer context: theta = 500000 (code-llama style)  
+    78→- **Recommendation for sub-100M**: Use theta = 10000 with target context 2048-4096.
+    79→
+    80→---
+    81→
+    82→## 2. SwiGLU Activation
+    83→
+    84→### The Formula
+    85→
+    86→Standard FFN (GELU/ReLU):
+    87→```
+    88→FFN(x) = W_2 * GELU(W_1 * x + b_1) + b_2
+    89→```
+    90→
+    91→**SwiGLU FFN:**
+    92→```
+    93→FFN_SwiGLU(x) = W_2 * (Swish(W_1 * x) * (V * x))
+    94→```
+    95→
+    96→Where:
+    97→- `Swish(x) = x * sigmoid(beta*x)` with beta=1 (equivalent to `SiLU` in PyTorch: `F.silu()`)  
+    98→- `*` (Hadamard) is element-wise product  
+    99→- `W_1 in R^{d_ff x d_model}`, `V in R^{d_ff x d_model}`, `W_2 in R^{d_model x d_ff}`  
+   100→- **No bias terms** (consistent with the no-bias design philosophy)  
+   101→- This is a **3-matrix** FFN instead of the standard 2-matrix FFN
+   102→
+   103→### PyTorch Implementation
+   104→
+   105→```python
+   106→class SwiGLUFFN(nn.Module):
+   107→    def __init__(self, d_model: int, d_ff: int):
+   108→        super().__init__()
+   109→        self.w1 = nn.Linear(d_model, d_ff, bias=False)  # gate projection
+   110→        self.w2 = nn.Linear(d_ff, d_model, bias=False)   # down projection
+   111→        self.w3 = nn.Linear(d_model, d_ff, bias=False)   # up projection
+   112→
+   113→    def forward(self, x):
+   114→        return self.w2(F.silu(self.w1(x)) * self.w3(x))
+   115→```
+   116→
+   117→### The d_ff / d_model Ratio
+   118→
+   119→Because SwiGLU uses 3 weight matrices instead of 2, the parameter count of the FFN increases. To maintain **the same total parameter budget** as a standard 2-matrix FFN with `d_ff = 4 x d_model`:
+   120→
+   121→```
+   122→Standard FFN params: 2 x d_model x (4 x d_model) = 8 x d_model^2
+   123→SwiGLU FFN params:  3 x d_model x d_ff_swiglu
+   124→
+   125→Setting equal: 3 x d_model x d_ff_swiglu = 8 x d_model^2
+   126→d_ff_swiglu = 8/3 x d_model = 2.667 x d_model
+   127→```
+   128→
+   129→**LLaMA paper recommends `d_ff = (8/3) x d_model`**, then rounded to the nearest multiple of 64 for hardware efficiency.
+   130→
+   131→| Model | d_model | d_ff | d_ff / d_model |
+   132→|-------|---------|------|----------------|
+   133→| LLaMA-7B | 4096 | 11008 | 2.688 |
+   134→| LLaMA-13B | 5120 | 13824 | 2.700 |
+   135→| LLaMA-70B | 8192 | 28672 | 3.500 |
+   136→
+   137→**Recommendation for sub-100M**: Use `d_ff = round_to_64(8/3 x d_model)`. For d_model=576: d_ff=1536. For d_model=768: d_ff=2048.
+   138→
+   139→### Why SwiGLU > GELU
+   140→
+   141→- **Gating mechanism**: The element-wise product creates a multiplicative interaction that acts as a learned, input-dependent gate — more expressive than a simple nonlinearity.
+   142→- **PaLM paper** showed SwiGLU outperforms GELU, ReGLU, and GEGLU across model scales.
+   143→- **No degradation at small scale**: The gating benefit applies even at sub-100M parameter counts.
+   144→
+   145→---
+   146→
+   147→## 3. RMSNorm
+   148→
+   149→### Formula
+   150→
+   151→**LayerNorm:**
+   152→```
+   153→LayerNorm(x) = (x - mu) / sqrt(sigma^2 + eps) * gamma + beta
+   154→where mu = mean(x), sigma^2 = var(x)
+   155→```
+   156→
+   157→**RMSNorm:**
+   158→```
+   159→RMSNorm(x) = x / sqrt(mean(x^2) + eps) * gamma
+   160→```
+   161→
+   162→Key differences:
+   163→1. **No mean subtraction** — removes the centering operation
+   164→2. **No learnable bias (beta)** — only a learnable scale (gamma)
+   165→3. Simpler computation: only needs the root mean square, not the full variance
+   166→
+   167→### PyTorch Implementation
+   168→
+   169→```python
+   170→class RMSNorm(nn.Module):
+   171→    def __init__(self, dim: int, eps: float = 1e-6):
+   172→        super().__init__()
+   173→        self.eps = eps
+   174→        self.gamma = nn.Parameter(torch.ones(dim))
+   175→
+   176→    def _norm(self, x):
+   177→        return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
+   178→
+   179→    def forward(self, x):
+   180→        output = self._norm(x.float()).type_as(x)
+   181→        return output * self.gamma
+   182→```
+   183→
+   184→### Why RMSNorm > LayerNorm for Small Models
+   185→
+   186→| Property | LayerNorm | RMSNorm |
+   187→|----------|-----------|---------|
+   188→| Parameters per norm | d_model (gamma) + d_model (beta) | d_model (gamma only) |
+   189→| Computation | mean + variance + center + scale | RMS + scale |
+   190→| Training stability | Good | **Comparable** (per arXiv:2409.12951) |
+   191→| Empirical performance | Baseline | **Equal or slightly better** |
+   192→
+   193→**Parameter savings**: For d_model=768, each LayerNorm saves 768 parameters (the beta vector). With N_Layers=12 and 3 norms per layer + 1 final = 37 norms, saves ~28K parameters. Small but free.
+   194→
+   195→**The deeper reason**: In the LLaMA-style pre-norm architecture, the normalization sits **before** each sublayer. The residual connection provides a "skip path" for the mean, so explicitly centering (subtracting the mean) in the norm is redundant — the model can learn any needed centering through the weight matrices. RMSNorm preserves the stabilizing **rescaling** effect while removing the unnecessary centering.
+   196→
+   197→### Epsilon Value
+   198→- LLaMA uses `eps = 1e-6` (not 1e-5 as in BERT-style models)
+   199→- **Recommendation**: Use `1e-6` for bfloat16/float16 training
+   200→
+   201→---
+   202→
+   203→## 4. GQA (Grouped Query Attention)
+   204→
+   205→### How It Works
+   206→
+   207→Standard Multi-Head Attention (MHA): Each of `n_heads` query heads has its own key and value head.
+   208→
+   209→Multi-Query Attention (MQA): All query heads share a **single** key and value head. (Extreme compression.)
+   210→
+   211→**GQA interpolates between MHA and MQA** by grouping query heads into `n_groups` groups, each sharing one KV head:
+   212→
+   213→```
+   214→n_kv_heads = n_heads / group_size
+   215→```
+   216→
+   217→Where `group_size = n_heads / n_kv_heads` determines how many query heads share each KV head.
+   218→
+   219→### Implementation
+   220→
+   221→```python
+   222→class GroupedQueryAttention(nn.Module):
+   223→    def __init__(self, d_model: int, n_heads: int, n_kv_heads: int):
+   224→        super().__init__()
+   225→        self.n_heads = n_heads
+   226→        self.n_kv_heads = n_kv_heads
+   227→        self.head_dim = d_model // n_heads
+   228→        self.n_groups = n_heads // n_kv_heads  # queries per KV head
+   229→
+   230→        self.wq = nn.Linear(d_model, n_heads * self.head_dim, bias=False)
+   231→        self.wk = nn.Linear(d_model, n_kv_heads * self.head_dim, bias=False)
+   232→        self.wv = nn.Linear(d_model, n_kv_heads * self.head_dim, bias=False)
+   233→        self.wo = nn.Linear(n_heads * self.head_dim, d_model, bias=False)
+   234→
+   235→    def forward(self, x, freqs_cis, mask=None):
+   236→        bsz, seqlen, _ = x.shape
+   237→        q = self.wq(x).view(bsz, seqlen, self.n_heads, self.head_dim)
+   238→        k = self.wk(x).view(bsz, seqlen, self.n_kv_heads, self.head_dim)
+   239→        v = self.wv(x).view(bsz, seqlen, self.n_kv_heads, self.head_dim)
+   240→
+   241→        # Apply RoPE to q and k
+   242→        q, k = apply_rotary_emb(q, k, freqs_cis)
+   243→
+   244→        # Expand KV heads to match query heads
+   245→        k = k.repeat_interleave(self.n_groups, dim=2)
+   246→        v = v.repeat_interleave(self.n_groups, dim=2)
+   247→
+   248→        # Standard scaled dot-product attention
+   249→        # ... (flash attention or manual implementation)
+   250→```
+   251→
+   252→### Recommended KV Heads for 8 Query Heads
+   253→
+   254→| Config | n_heads | n_kv_heads | group_size | Quality | KV Cache Saving |
+   255→|--------|---------|------------|------------|---------|-----------------|
+   256→| MHA | 8 | 8 | 1 | Best | 0% |
+   257→| **GQA-4** | 8 | **4** | 2 | **Near-MHA** | **50%** |
+   258→| GQA-2 | 8 | 2 | 4 | Slight degradation | 75% |
+   259→| MQA | 8 | 1 | 8 | Noticeable loss | 87.5% |
+   260→
+   261→**Recommendation for sub-100M**: Use **4 KV heads for 8 query heads** (GQA with group_size=2). This is the same ratio used by LLaMA-2 70B and LLaMA-3 8B. It provides ~50% KV cache reduction with negligible quality loss.
+   262→
+   263→**For even smaller models** (e.g., 4 query heads with d_model=512): Use **2 KV heads**.
+   264→
+   265→### Parameter Savings Calculation
+   266→
+   267→For d_model=768, n_heads=8, head_dim=96:
+   268→- MHA WK: 768 x 768 = 589,824 params; WV: same -> **1,179,648 total**
+   269→- GQA-4 WK: 768 x 384 = 294,912; WV: same -> **589,824 total** (50% saving per layer)
+   270→
+   271→With 12 layers, that's **~7.1M saved** — 7% of a 100M budget, which is significant.
+   272→
+   273→---
+   274→
+   275→## 5. Weight Tying
+   276→
+   277→### What It Is
+   278→Share the token embedding matrix `W_e in R^{V x d_model}` with the LM head (output projection) `W_out in R^{d_model x V}`:
+   279→
+   280→```
+   281→W_out = W_e^T    (or equivalently, nn.Linear with W_out = W_e)
+   282→```
+   283→
+   284→### The Super Tiny Language Models Finding (arXiv:2405.14159)
+   285→
+   286→> "The embedding and LM head layers can account for 45.20% to 62.25% of total parameter count depending on whether weight tying is used."
+   287→
+   288→For a model with V=50,000 vocab and d_model=768:
+   289→- Embedding: 50,000 x 768 = **38.4M parameters**
+   290→- LM head (untied): another **38.4M parameters**
+   291→- **Total with tying**: 38.4M; **without tying**: 76.8M
+   292→
+   293→For a 100M model, weight tying can **save up to 38% of total parameters**.
+   294→
+   295→### When to Use Weight Tying for Sub-100M Models
+   296→
+   297→| Scenario | Recommendation |
+   298→|----------|---------------|
+   299→| Very small vocab (<=32K) | **Yes, tie** — the savings are smaller but still meaningful |
+   300→| Standard vocab (~50K) | **Yes, tie** — saves up to 38% of total params |
+   301→| Large vocab (100K+) | **Strongly tie** — without tying, most params go to embeddings |
+   302→| Need maximum quality | **Trade-off**: untied gives slightly more expressiveness, but at massive param cost |
+   303→
+   304→**Recommendation**: **Always tie for sub-100M models.** Use the saved parameters to increase model depth or width.
+   305→
+   306→---
+   307→
+   308→## 6. No Bias in Linear Layers
+   309→
+   310→### Why This Works
+   311→
+   312→The LLaMA architecture removes bias from ALL linear layers:
+   313→- Q, K, V projections: no bias
+   314→- Output projection (Wo): no bias
+   315→- FFN up/gate/down projections: no bias
+   316→
+   317→**Theoretical justification** (from PaLM paper and Sebastian Raschka's analysis):
+   318→1. **RMSNorm already rescales**: After RMSNorm, the activations are centered (mean ~ 0) and normalized. A bias in the subsequent linear layer would shift the distribution away from the normalized state — somewhat counterproductive.
+   319→2. **Residual connections provide offset**: The `x + sublayer(Norm(x))` path lets the model learn any needed bias through the residual.
+   320→3. **Training stability**: PaLM reported "increased training stability" without biases in large models.
+   321→
+   322→### Parameter Savings
+   323→
+   324→For a linear layer `y = Wx + b`:
+   325→- Without bias: `d_out` parameters saved per layer
+   326→
+   327→Per transformer block:
+   328→| Layer | Dimensions | Params Saved |
+   329→|-------|-----------|-------------|
+   330→| Wq | d_model -> n_heads x head_dim | d_model |
+   331→| Wk | d_model -> n_kv_heads x head_dim | n_kv_heads x head_dim |
+   332→| Wv | d_model -> n_kv_heads x head_dim | n_kv_heads x head_dim |
+   333→| Wo | n_heads x head_dim -> d_model | d_model |
+   334→| W1 (gate) | d_model -> d_ff | d_ff |
+   335→| W3 (up) | d_model -> d_ff | d_ff |
+   336→| W2 (down) | d_ff -> d_model | d_model |
+   337→
+   338→For d_model=768, d_ff=2048, n_kv=4, head_dim=96: **~6,400 params/layer x 12 layers = ~77K saved**. Not huge, but it's free and simplifies the model.
+   339→
+   340→**Recommendation**: Remove all biases. The simplification in implementation (no bias management in mixed-precision, weight decay exclusion lists, etc.) is worth more than the parameter savings.
+   341→
+   342→---
+   343→
+   344→## 7. Modern Small Model Training Recipes
+   345→
+   346→### Chinchilla Scaling for Small Models
+   347→
+   348→The Chinchilla paper (Hoffmann et al., 2022) established that compute-optimal training uses approximately **20 tokens per parameter**:
+   349→
+   350→```
+   351→N_tokens_optimal = 20 x N_parameters
+   352→```
+   353→
+   354→For a 100M model: **~2B tokens** for compute-optimal training.
+   355→
+   356→**However**, for sub-100M models, the community consensus is to **overtrain** significantly:
+   357→- **TinyLlama (1.1B)**: Trained on 1T tokens (~1000:1 ratio)
+   358→- **Phi models**: Trained on "textbook-quality" data with high repeat tolerance
+   359→- **Recommendation for 100M**: Train on **10-50B tokens** (100:1 to 500:1 ratio)
+   360→
+   361→Overtraining small models works because:
+   362→1. More data != more overfitting if data is diverse
+   363→2. Small models benefit enormously from data quality and repetition
+   364→3. The compute cost of overtraining a 100M model is negligible
+   365→
+   366→### Learning Rate Schedule
+   367→
+   368→```python
+   369→# Cosine annealing with warmup (the standard for modern LLMs)
+   370→def get_lr(step, max_lr, min_lr, warmup_steps, total_steps):
+   371→    if step < warmup_steps:
+   372→        return max_lr * (step / warmup_steps)
+   373→    if step > total_steps:
+   374→        return min_lr
+   375→    decay_ratio = (step - warmup_steps) / (total_steps - warmup_steps)
+   376→    coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))
+   377→    return min_lr + coeff * (max_lr - min_lr)
+   378→```
+   379→
+   380→**Recommended hyperparameters for sub-100M models:**
+   381→
+   382→| Hyperparameter | Recommended Value | Notes |
+   383→|---------------|-------------------|-------|
+   384→| Max LR | 3e-4 to 1e-3 | Higher than large models; 6e-4 is a good default |
+   385→| Min LR | max_lr x 0.1 | Don't decay to zero |
+   386→| Warmup steps | 1-5% of total steps | ~2000 steps for 50B tokens |
+   387→| Schedule | Cosine decay | Standard; linear decay also works |
+   388→| Weight decay | 0.1 | Apply to all weights, not biases/norms |
+   389→| Grad clip | 1.0 | Global gradient norm clipping |
+   390→| AdamW beta1, beta2 | 0.9, 0.95 | Standard for LLMs (not 0.999) |
+   391→| Epsilon | 1e-8 | Standard |
+   392→
+   393→### Batch Size
+   394→
+   395→| Model Size | Global Batch Size | Seq Length | Tokens/Batch |
+   396→|-----------|-------------------|------------|-------------|
+   397→| ~50M | 256-512 | 2048 | 0.5M-1M |
+   398→| ~100M | 512-1024 | 2048 | 1M-2M |
+   399→
+   400→### Data Mix Strategy
+   401→
+   402→Following the Phi model philosophy of "textbook quality" data:
+   403→
+   404→| Source | Proportion | Rationale |
+   405→|--------|-----------|-----------|
+   406→| Web text (filtered) | 50-60% | Diverse knowledge |
+   407→| Code | 15-20% | Structured reasoning, logical patterns |
+   408→| Books/papers | 10-15% | High-quality long-form |
+   409→| Wikipedia | 5-10% | Factual accuracy |
+   410→| Synthetic/instruction | 5-10% | Task diversity |
+   411→
+   412→**Critical for small models**: Quality > Quantity. Filter aggressively:
+   413→- Perplexity filtering (remove pages with high perplexity under a reference model)
+   414→- Deduplication (exact and fuzzy)
+   415→- Remove low-quality/malicious content
+   416→- Prefer shorter, information-dense documents
+   417→
+   418→### Precision
+   419→
+   420→- **Train in bfloat16** (or mixed bf16/fp32)
+   421→- Use bf16 for forward/backward, fp32 for optimizer states
+   422→- bfloat16 avoids the underflow/overflow issues of float16
+   423→
+   424→---
+   425→
+   426→## 8. Mixed-Precision Quantization
+   427→
+   428→### Which Layers to Keep at Higher Precision
+   429→
+   430→After training, when quantizing for deployment:
+   431→
+   432→| Layer | Recommended Precision | Rationale |
+   433→|-------|----------------------|-----------|
+   434→| **Token Embedding** | FP16/BF16 (keep high) | Lookup table; quantization destroys semantic structure |
+   435→| **LM Head** | FP16/BF16 (keep high) | Direct impact on logit distribution; tied with embedding if weight tying |
+   436→| **First & Last Transformer Layers** | FP16 or INT8 | Input/output layers are most sensitive |
+   437→| **Middle Transformer Layers** | INT4 or INT8 | Most robust to quantization |
+   438→| **Q/K/V Projections** | INT8 preferred | Attention scores are sensitive to Q/K precision |
+   439→| **FFN Weights** | INT4 acceptable | FFN activations (SwiGLU gating) provide natural noise tolerance |
+   440→| **RMSNorm gamma** | FP16 (keep high) | Small parameters, large impact on magnitude |
+   441→| **RoPE frequencies** | FP32 (computed) | Not stored, but computation must be precise |
+   442→
+   443→### Key Insight from SliM-LLM (ICML 2025)
+   444→
+   445→> Salience-driven mixed precision: assign higher precision to weights that have the most impact on attention and FFN outputs. The first and last layers are most salient; middle layers can tolerate 4-bit.
+   446→
+   447→### Practical Quantization Config for 100M Model
+   448→
+   449→```python
+   450→# Using bitsandbytes-style mixed quantization
+   451→quantization_config = {
+   452→    "embedding": "fp16",           # Don't quantize
+   453→    "lm_head": "fp16",             # Don't quantize (often tied with embedding)
+   454→    "layer_0": "int8",             # First layer: higher precision
+   455→    "layer_1_to_N-2": "int4",      # Middle layers: aggressive quantization
+   456→    "layer_N-1": "int8",           # Last layer: higher precision
+   457→    "rmsnorm_gamma": "fp16",       # Always keep norms in higher precision
+   458→}
+   459→```
+   460→
+   461→**Expected result**: ~3-4x size reduction with <1% perplexity degradation.
+   462→
+   463→---
+   464→
+   465→## 9. Additional Techniques for Maximizing Intelligence Per Parameter
+   466→
+   467→### 9a. Pre-Norm Architecture (Not Post-Norm)
+   468→
+   469→Place RMSNorm **before** each sublayer, not after:
+   470→
+   471→```
+   472→x = x + Attention(RMSNorm(x))
+   473→x = x + FFN(RMSNorm(x))
+   474→```
+   475→
+   476→**Why**: Pre-norm ensures the residual path is unimpeded — gradients flow directly through the skip connection. Post-norm can cause gradient vanishing in deeper stacks. For small models (10-24 layers), pre-norm provides better training stability.
+   477→
+   478→**Reference**: The "Post-LayerNorm Is Back" paper shows post-norm CAN work with careful initialization, but requires more tuning. Pre-norm is the safer default.
+   479→
+   480→### 9b. Flash Attention
+   481→
+   482→Use Flash Attention 2 during training for:
+   483→- **2-4x speedup** on attention computation
+   484→- **O(N) memory** instead of O(N^2) for the attention matrix
+   485→- Numerically identical results (exact attention, not approximate)
+   486→
+   487→```python
+   488→from flash_attn import flash_attn_func
+   489→# Replace manual attention with:
+   490→attn_output = flash_attn_func(q, k, v, causal=True)
+   491→```
+   492→
+   493→This doesn't change the model architecture or parameters — it's purely a training/inference efficiency gain.
+   494→
+   495→### 9c. Vocabulary Size Optimization
+   496→
+   497→For sub-100M models, the vocabulary size is a critical choice:
+   498→
+   499→| Vocab Size | Embedding Params (d=768) | % of 100M Budget |
+   500→|-----------|-------------------------|-------------------|
+   501→| 32,000 | 24.6M | 24.6% |
+   502→| 50,000 | 38.4M | 38.4% |
+   503→| 100,000 | 76.8M | 76.8% |
+   504→
+   505→**Recommendation**: Use a **32K-50K BPE vocabulary**. With weight tying, this uses 24-38% of the budget for embeddings — still the single largest component. A well-trained 32K tokenizer (like GPT-2's or LLaMA's) is sufficient.
+   506→
+   507→### 9d. Knowledge Distillation
+   508→
+   509→Train the small model to mimic a larger teacher model's output distribution:
+   510→
+   511→```python
+   512→# Standard KD loss
+   513→loss = alpha * KL(student_logits/T, teacher_logits/T) + (1-alpha) * CE(student_logits, targets)
+   514→```
+   515→
+   516→Where:
+   517→- `T` is the temperature (typically 2-5 for softening distributions)
+   518→- `alpha` balances KD loss vs standard cross-entropy (0.5-0.7 is common)
+   519→
+   520→**When to use**: If you have access to a good teacher model (e.g., LLaMA-1B or similar), distillation can add 2-5% absolute improvement on benchmarks.
+   521→
+   522→### 9e. Gradient Checkpointing
+   523→
+   524→For training efficiency (not quality), use gradient checkpointing to trade compute for memory:
+   525→
+   526→```python
+   527→model.gradient_checkpointing_enable()
+   528→```
+   529→
+   530→This re-computes intermediate activations during backward pass instead of storing them, reducing memory from O(NxL) to O(Nxsqrt(L)). Essential for training on consumer GPUs.
+   531→
+   532→### 9f. Overtraining + Data Repeat
+   533→
+   534→For small models, overtraining is beneficial. Use data repetition strategies:
+   535→- **Epoch-based**: Pass through data 5-20 times with different shuffling
+   536→- **Curriculum**: Start with simpler/shorter sequences, gradually increase
+   537→- **Mix in code**: Code data provides structured reasoning patterns that generalize
+   538→
+   539→### 9g. RoPE Scaling for Extended Context
+   540→
+   541→If you need context beyond training length, use RoPE interpolation:
+   542→
+   543→```python
+   544→# Linear scaling (simplest)
+   545→freqs_cis_scaled = precompute_freqs_cis(dim, max_seq_len * scale_factor)
+   546→# At inference, use scale_factor to extend context
+   547→```
+   548→
+   549→For sub-100M models, train at 2048 context and scale to 4096 at inference using linear RoPE scaling with scale_factor=2. Quality degrades minimally.
+   550→
+   551→---
+   552→
+   553→## Recommended Architecture for a 100M Parameter Model
+   554→
+   555→Putting it all together:
+   556→
+   557→```python
+   558→config = {
+   559→    # Core dimensions
+   560→    "d_model": 768,           # Hidden dimension
+   561→    "n_layers": 12,           # Transformer layers
+   562→    "n_heads": 12,            # Query heads
+   563→    "n_kv_heads": 4,          # KV heads (GQA with group_size=3)
+   564→    "head_dim": 64,           # d_model // n_heads = 768/12 = 64
+   565→    "d_ff": 2048,             # FFN inner dim (~ 8/3 x d_model, rounded to 64)
+   566→    "vocab_size": 32000,      # BPE vocabulary
+   567→    "max_seq_len": 2048,      # Training context length
+   568→
+   569→    # Modern techniques
+   570→    "norm": "RMSNorm",        # Pre-normalization with RMSNorm
+   571→    "norm_eps": 1e-6,
+   572→    "activation": "SwiGLU",   # Gated FFN with SiLU
+   573→    "pos_emb": "RoPE",        # Rotary position embeddings
+   574→    "rope_theta": 10000.0,
+   575→    "bias": False,            # No bias in any linear layer
+   576→    "weight_tying": True,     # Share embedding and LM head
+   577→
+   578→    # Training
+   579→    "lr_max": 6e-4,
+   580→    "lr_min": 6e-5,
+   581→    "warmup_steps": 2000,
+   582→    "weight_decay": 0.1,
+   583→    "adam_beta1": 0.9,
+   584→    "adam_beta2": 0.95,
+   585→    "grad_clip": 1.0,
+   586→    "batch_size": 512,
+   587→    "seq_len": 2048,
+   588→    "total_tokens": "20-50B",  # Overtrain significantly
+   589→    "precision": "bf16",       # Mixed precision training
+   590→}
+   591→```
+   592→
+   593→### Approximate Parameter Count Breakdown
+   594→
+   595→| Component | Calculation | Parameters |
+   596→|-----------|------------|------------|
+   597→| Token Embedding | 32000 x 768 | 24.6M |
+   598→| LM Head (tied) | 0 | 0M |
+   599→| Per Layer: Wq | 768 x 768 | 0.59M |
+   600→| Per Layer: Wk | 768 x 256 | 0.20M |
+   601→| Per Layer: Wv | 768 x 256 | 0.20M |
+   602→| Per Layer: Wo | 768 x 768 | 0.59M |
+   603→| Per Layer: W1 (gate) | 768 x 2048 | 1.57M |
+   604→| Per Layer: W3 (up) | 768 x 2048 | 1.57M |
+   605→| Per Layer: W2 (down) | 2048 x 768 | 1.57M |
+   606→| Per Layer: RMSNorm x 2 | 768 + 768 | 0.0015M |
+   607→| **Per Layer Total** | | **6.29M** |
+   608→| **All 12 Layers** | | **75.5M** |
+   609→| Final RMSNorm | 768 | 0.0008M |
+   610→| **TOTAL** | | **~100.1M** |
+   611→
+   612→---
+   613→
+   614→## Summary: Priority-Ordered Technique List
+   615→
+   616→| Priority | Technique | Impact | Effort |
+   617→|----------|-----------|--------|--------|
+   618→| CRITICAL 1 | **Weight tying** | Saves 24-38% of total params | Trivial — one line |
+   619→| CRITICAL 2 | **RoPE** | Saves 1-2% params + better extrapolation | Easy — standard implementation |
+   620→| CRITICAL 3 | **SwiGLU** | ~2% quality gain over GELU | Easy — standard implementation |
+   621→| CRITICAL 4 | **GQA (4 KV heads)** | Saves ~7% params + faster inference | Moderate |
+   622→| HIGH 5 | **RMSNorm** | Slightly faster, slightly fewer params | Easy |
+   623→| HIGH 6 | **No bias** | Simplifies model, small param savings | Easy |
+   624→| HIGH 7 | **Overtraining (100-500x)** | Major quality gain for small models | Just more compute |
+   625→| HIGH 8 | **Data quality > quantity** | Critical for small model intelligence | Data curation effort |
+   626→| MEDIUM 9 | **Knowledge distillation** | 2-5% quality gain | Need teacher model |
+   627→| MEDIUM 10 | **Mixed-precision quant** | 3-4x deployment size reduction | Post-training step |
+   628→| MEDIUM 11 | **Flash attention** | Training speedup, same quality | Install flash-attn |
+   629→
+   630→---
+   631→
+   632→## Key References
+   633→
+   634→1. **RoPE**: Su et al., "RoFormer: Enhanced Transformer with Rotary Position Embedding" (2021)
+   635→2. **SwiGLU**: Shazeer, "GLU Variants Improve Transformer" (2020); PaLM (Chowdhery et al., 2022)
+   636→3. **RMSNorm**: Zhang & Sennrich, "Root Mean Square Layer Normalization" (2019)
+   637→4. **GQA**: Ainslie et al., "GQA: Training Generalized Multi-Query Transformer Models from Multi-Head Checkpoints" (2023)
+   638→5. **Chinchilla**: Hoffmann et al., "Training Compute-Optimal Large Language Models" (2022)
+   639→6. **Super Tiny LMs**: Guertler et al., arXiv:2405.14159 (2024)
+   640→7. **SLM Survey**: Sakib et al., arXiv:2505.19529 (2025)
+   641→8. **LLaMA**: Touvron et al., "LLaMA: Open and Efficient Foundation Language Models" (2023)
+   642→9. **SliM-LLM**: ICML 2025 — salience-driven mixed-precision quantization
+   643→10. **RMSNorm vs LayerNorm**: arXiv:2409.12951 — supports RMSNorm as equally effective
+   644→
