@@ -122,14 +122,21 @@
 }
 
 /* ── FishAI 打字机 & UI 动效 ── */
-@keyframes cursorPulse {
-  0%   { opacity: 0; transform: scaleY(0.6); }
-  30%  { opacity: 1; transform: scaleY(1); }
-  70%  { opacity: 1; transform: scaleY(1); }
-  100% { opacity: 0; transform: scaleY(0.6); }
+
+/* 光标呼吸 — 缓入缓出，自然感 */
+@keyframes cursorBreathe {
+  0%, 100% { opacity: 0.2; transform: scaleY(0.7); }
+  50%      { opacity: 1;   transform: scaleY(1); }
 }
 
+/* 新字符淡入 — 极轻微，不突兀 */
+@keyframes charFadeIn {
+  from { opacity: 0.3; }
+  to   { opacity: 1; }
+}
+
+/* 消息气泡入场 */
 @keyframes fadeSlideIn {
-  from { opacity: 0; transform: translateY(6px); }
+  from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
