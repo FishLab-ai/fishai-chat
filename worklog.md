@@ -66,3 +66,33 @@ Stage Summary:
 - 架构验证: FishAI-S 34M 参数，4-bit 约 16.3MB
 - 训练验证: Loss 正常下降，架构正确
 - 待完成: 在 GPU 上用真实数据训练 50K+ 步并跑分对比
+
+---
+Task ID: 6
+Agent: main
+Task: SIMD/汇编级CPU极限优化 + GitHub Actions CI/CD
+
+Work Log:
+- 完整分析 fishai-engine (Rust) 和 fishai-train (Python) 源码
+- 识别核心瓶颈: qmat_vec/rms_norm/softmax/attention占推理90%+时间
+- 编写 src/simd.rs: 650+行汇编加速模块
+  - 运行时CPU特性检测: AVX-512+VNNI / AVX-512 / AVX2+FMA / SSE4.2 / 标量
+  - mat_vec: 矩阵×向量 (4x循环展开+预取+4路独立FMA累加器)
+  - rms_norm: SIMD向量化求平方和+乘法
+  - softmax: SIMD找最大值+向量化exp(Horner多项式)+归一化
+  - dot_product: 注意力Q·K点积加速
+  - weighted_accumulate: 注意力score·V加权求和
+  - silu_simd: SwiGLU的SiLU激活向量化
+  - qmat_vec_int4/int8_inline: 边解量化边矩阵乘(省中间buffer)
+- 检测到当前CPU: Intel Xeon, AVX-512+VNNI (512-bit向量, 16xf32并行)
+- 5项SIMD测试全部通过 (debug模式基准: mat_vec~0.83 GFLOPS)
+- 版本升级 3.0.0 → 3.1.0, LTO改为fat模式
+- 创建 GitHub Actions CI: fishai-engine (构建+测试+SIMD基准)
+- 创建 GitHub Actions CI: fishai-train (训练+测试+跑分)
+- 推送到 GitHub: fishai-engine ✓, fishai-train (需认证)
+
+Stage Summary:
+- SIMD模块: 不管硬件多差都有对应路径跑(标量→SSE4.2→AVX2→AVX-512→AVX-512+VNNI)
+- CPU检测自动选择最优路径，零配置
+- GitHub Actions CI就绪，推送自动触发测试
+- fishai-engine已推送: https://github.com/FishLab-ai/fishai-engine
