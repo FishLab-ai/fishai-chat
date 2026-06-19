@@ -30,26 +30,26 @@ function CodeBlock({ lang, code, streaming }: { lang: string; code: string; stre
   };
 
   return (
-    <div className="my-2.5 rounded-xl overflow-hidden border border-neutral-200/80 dark:border-neutral-700/50 bg-[#fafafa] dark:bg-neutral-800/40 group">
-      <div className="px-3.5 py-1.5 text-[11px] font-mono text-neutral-400 dark:text-neutral-500 flex items-center justify-between border-b border-neutral-200/60 dark:border-neutral-700/40 bg-neutral-100/60 dark:bg-neutral-800/60">
+    <div className="my-2.5 rounded-xl overflow-hidden border border-border bg-muted/40 dark:bg-muted/40 group">
+      <div className="px-3.5 py-1.5 text-[11px] font-mono text-muted-foreground dark:text-muted-foreground flex items-center justify-between border-b border-border bg-muted/60 dark:bg-muted/60">
         <span className="flex items-center gap-1.5">
           <Code2 className="w-3 h-3" />{lang || 'code'}
         </span>
         <div className="flex items-center gap-2">
           {streaming && (
-            <span className="flex items-center gap-1 text-blue-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+            <span className="flex items-center gap-1 text-primary">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary/80 animate-pulse" />
               生成中
             </span>
           )}
           {!streaming && (
-            <button onClick={handleCopy} className="opacity-0 group-hover:opacity-100 transition-opacity text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300">
-              {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+            <button onClick={handleCopy} className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-muted-foreground dark:hover:text-muted-foreground/60">
+              {copied ? <Check className="w-3.5 h-3.5 text-chart-2" /> : <Copy className="w-3.5 h-3.5" />}
             </button>
           )}
         </div>
       </div>
-      <pre className="p-3.5 overflow-x-auto text-[13px] leading-[1.65] font-mono text-neutral-700 dark:text-neutral-300">
+      <pre className="p-3.5 overflow-x-auto text-[13px] leading-[1.65] font-mono text-foreground/80">
         <code>{code}{streaming ? '\n' : ''}</code>
       </pre>
     </div>
@@ -64,7 +64,7 @@ function InlineMd({ text }: { text: string }) {
     <span>
       {segments.map((seg, i) => {
         if (seg.startsWith('`') && seg.endsWith('`') && seg.length > 2) {
-          return <code key={i} className="bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-md text-[13px] font-mono">{seg.slice(1, -1)}</code>;
+          return <code key={i} className="bg-accent/60 dark:bg-primary/25 text-primary px-1.5 py-0.5 rounded-md text-[13px] font-mono">{seg.slice(1, -1)}</code>;
         }
         // 拆加粗
         const boldParts = seg.split(/(\*\*[^*]+\*\*)/g);
@@ -72,7 +72,7 @@ function InlineMd({ text }: { text: string }) {
           // 处理未闭合的 **（流式中可能遇到）
           const halfBold = seg.split(/(\*\*[^*]*)$/);
           if (halfBold.length > 1 && halfBold[1].startsWith('**') && !halfBold[1].endsWith('**')) {
-            return <span key={i}><span>{halfBold[0]}</span><span className="text-neutral-400">{halfBold[1]}</span></span>;
+            return <span key={i}><span>{halfBold[0]}</span><span className="text-muted-foreground">{halfBold[1]}</span></span>;
           }
           return <span key={i}>{seg}</span>;
         }
@@ -80,7 +80,7 @@ function InlineMd({ text }: { text: string }) {
           <span key={i}>
             {boldParts.map((bp, j) => {
               if (bp.startsWith('**') && bp.endsWith('**') && bp.length > 4) {
-                return <strong key={j} className="font-semibold text-neutral-900 dark:text-neutral-50">{bp.slice(2, -2)}</strong>;
+                return <strong key={j} className="font-semibold text-foreground">{bp.slice(2, -2)}</strong>;
               }
               return <span key={j}>{bp}</span>;
             })}
@@ -155,13 +155,13 @@ function TextBlock({ text }: { text: string }) {
     if (listItems.length === 0) return;
     if (listType === 'ul') {
       elements.push(
-        <ul key={`ul-${elements.length}`} className="my-1.5 ml-4 space-y-0.5 list-disc list-outside text-neutral-700 dark:text-neutral-300">
+        <ul key={`ul-${elements.length}`} className="my-1.5 ml-4 space-y-0.5 list-disc list-outside text-foreground/80">
           {listItems.map((item, j) => <li key={j} className="text-sm leading-relaxed pl-0.5"><InlineMd text={item} /></li>)}
         </ul>
       );
     } else if (listType === 'ol') {
       elements.push(
-        <ol key={`ol-${elements.length}`} className="my-1.5 ml-4 space-y-0.5 list-decimal list-outside text-neutral-700 dark:text-neutral-300">
+        <ol key={`ol-${elements.length}`} className="my-1.5 ml-4 space-y-0.5 list-decimal list-outside text-foreground/80">
           {listItems.map((item, j) => <li key={j} className="text-sm leading-relaxed pl-0.5"><InlineMd text={item} /></li>)}
         </ol>
       );
@@ -195,7 +195,7 @@ function TextBlock({ text }: { text: string }) {
         6: 'text-sm font-semibold',
       };
       elements.push(
-        <div key={`h-${elements.length}`} className={`${sizes[level]} text-neutral-900 dark:text-neutral-100 mt-3 mb-1.5`}>
+        <div key={`h-${elements.length}`} className={`${sizes[level]} text-foreground mt-3 mb-1.5`}>
           <InlineMd text={content} />
         </div>
       );
@@ -212,7 +212,7 @@ function TextBlock({ text }: { text: string }) {
         i++;
       }
       elements.push(
-        <blockquote key={`bq-${elements.length}`} className="my-1.5 border-l-3 border-blue-400/60 dark:border-blue-500/40 pl-3 text-neutral-600 dark:text-neutral-400 text-sm leading-relaxed">
+        <blockquote key={`bq-${elements.length}`} className="my-1.5 border-l-3 border-primary/50 pl-3 text-muted-foreground text-sm leading-relaxed">
           {quoteLines.map((ql, j) => <p key={j} className="mb-0.5 last:mb-0"><InlineMd text={ql} /></p>)}
         </blockquote>
       );
@@ -242,7 +242,7 @@ function TextBlock({ text }: { text: string }) {
     // 分隔线
     if (/^-{3,}$/.test(line.trim()) || /^\*{3,}$/.test(line.trim())) {
       flushList();
-      elements.push(<hr key={`hr-${elements.length}`} className="my-3 border-neutral-200 dark:border-neutral-700" />);
+      elements.push(<hr key={`hr-${elements.length}`} className="my-3 border-border dark:border-border" />);
       i++;
       continue;
     }
@@ -255,7 +255,7 @@ function TextBlock({ text }: { text: string }) {
       i++;
     }
     elements.push(
-      <p key={`p-${elements.length}`} className="my-1 text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">
+      <p key={`p-${elements.length}`} className="my-1 text-sm leading-relaxed text-foreground/80">
         <InlineMd text={paraLines.join('\n')} />
       </p>
     );
@@ -299,17 +299,17 @@ function ThemeToggle({ dark, setDark }: { dark: boolean; setDark: (d: boolean) =
     <button
       onClick={() => setDark(!dark)}
       className={`relative rounded-full flex items-center transition-all duration-300 w-14 h-7 p-0.5 ${
-        dark ? 'bg-neutral-700 hover:bg-neutral-600' : 'bg-blue-100 hover:bg-blue-200'
+        dark ? 'bg-muted-foreground hover:bg-muted-foreground' : 'bg-accent hover:bg-accent'
       }`}
       aria-label={dark ? '切换到亮色模式' : '切换到暗色模式'}
     >
       <span className={`flex items-center justify-center rounded-full bg-white shadow-sm transition-all duration-300 ease-in-out w-6 h-6 ${
         dark ? 'translate-x-7' : 'translate-x-0'
       }`}>
-        {dark ? <Moon className="w-3.5 h-3.5 text-blue-400" /> : <Sun className="w-3.5 h-3.5 text-amber-500" />}
+        {dark ? <Moon className="w-3.5 h-3.5 text-primary" /> : <Sun className="w-3.5 h-3.5 text-chart-3" />}
       </span>
-      <Sun className={`absolute left-1.5 w-3 h-3 text-amber-400 transition-opacity duration-300 ${dark ? 'opacity-40' : 'opacity-0'}`} />
-      <Moon className={`absolute right-1.5 w-3 h-3 text-blue-300 transition-opacity duration-300 ${dark ? 'opacity-0' : 'opacity-40'}`} />
+      <Sun className={`absolute left-1.5 w-3 h-3 text-chart-3 transition-opacity duration-300 ${dark ? 'opacity-40' : 'opacity-0'}`} />
+      <Moon className={`absolute right-1.5 w-3 h-3 text-primary/80 transition-opacity duration-300 ${dark ? 'opacity-0' : 'opacity-40'}`} />
     </button>
   );
 }
@@ -317,19 +317,19 @@ function ThemeToggle({ dark, setDark }: { dark: boolean; setDark: (d: boolean) =
 // ────── 介绍页 ──────
 function Landing({ onStart, dark, setDark }: { onStart: () => void; dark: boolean; setDark: (d: boolean) => void }) {
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-b from-white to-blue-50/30 dark:from-neutral-950 dark:to-neutral-900/50 transition-colors duration-500">
+    <div className="min-h-screen flex flex-col bg-background transition-colors duration-500">
       <header className="h-14 flex items-center justify-between px-5 sm:px-8">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-blue-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
+          <div className="w-8 h-8 rounded-xl bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
             <Fish className="w-4 h-4 text-white" />
           </div>
-          <span className="font-bold text-[15px] tracking-tight text-neutral-900 dark:text-neutral-100">FishAI</span>
-          <span className="text-[10px] font-medium text-blue-500 bg-blue-50 dark:bg-blue-950/50 dark:text-blue-400 px-1.5 py-0.5 rounded-full">v2</span>
+          <span className="font-bold text-[15px] tracking-tight text-foreground">FishAI</span>
+          <span className="text-[10px] font-medium text-primary bg-accent/60 dark:bg-primary/30 dark:text-primary px-1.5 py-0.5 rounded-full">v2</span>
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle dark={dark} setDark={setDark} />
           <a href="https://github.com/FishLab-ai" target="_blank" rel="noopener noreferrer"
-            className="h-8 px-3 rounded-lg flex items-center gap-1.5 text-xs font-medium text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all duration-200">
+            className="h-8 px-3 rounded-lg flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground/80 dark:hover:text-muted-foreground/40 hover:bg-muted dark:hover:bg-muted transition-all duration-200">
             <Github className="w-4 h-4" /><span className="hidden sm:inline">GitHub</span>
           </a>
         </div>
@@ -338,17 +338,17 @@ function Landing({ onStart, dark, setDark }: { onStart: () => void; dark: boolea
       <main className="flex-1 flex flex-col items-center justify-center px-6 pb-20">
         <div className="max-w-md text-center space-y-7">
           <div className="relative inline-block">
-            <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-xl shadow-blue-500/25 mx-auto">
+            <div className="w-20 h-20 rounded-3xl bg-primary flex items-center justify-center shadow-xl shadow-primary/25 mx-auto">
               <Fish className="w-10 h-10 text-white" />
             </div>
-            <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-lg bg-gradient-to-br from-emerald-400 to-emerald-500 flex items-center justify-center shadow-lg shadow-emerald-500/25">
+            <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-lg bg-chart-2 flex items-center justify-center shadow-lg shadow-chart-2/25">
               <Sparkles className="w-3.5 h-3.5 text-white" />
             </div>
           </div>
 
           <div className="space-y-2">
-            <h1 className="text-4xl font-extrabold tracking-tight text-neutral-900 dark:text-neutral-100">FishAI</h1>
-            <p className="text-base text-neutral-500 dark:text-neutral-400 leading-relaxed">FishLab-ai 自研 AI 助手，小体积最聪明</p>
+            <h1 className="text-4xl font-extrabold tracking-tight text-foreground">FishAI</h1>
+            <p className="text-base text-muted-foreground leading-relaxed">FishLab-ai 自研 AI 助手，小体积最聪明</p>
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-2">
@@ -357,18 +357,18 @@ function Landing({ onStart, dark, setDark }: { onStart: () => void; dark: boolea
               { icon: Binary, label: '4-bit 量化' },
               { icon: Zap, label: '~12MB' },
             ].map((t, i) => (
-              <span key={i} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/80 dark:bg-neutral-800/80 border border-neutral-200/80 dark:border-neutral-700/50 text-[11px] font-medium text-neutral-500 dark:text-neutral-400 shadow-sm">
+              <span key={i} className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/80 dark:bg-muted/80 border border-border text-[11px] font-medium text-muted-foreground shadow-sm">
                 <t.icon className="w-3 h-3" />{t.label}
               </span>
             ))}
           </div>
 
-          <div className="bg-white/60 dark:bg-neutral-800/40 rounded-2xl border border-neutral-200/60 dark:border-neutral-700/40 p-4 text-left">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 dark:text-neutral-500 mb-2.5">架构特性</p>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-neutral-600 dark:text-neutral-400">
+          <div className="bg-white/60 dark:bg-muted/40 rounded-2xl border border-border p-4 text-left">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground dark:text-muted-foreground mb-2.5">架构特性</p>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-muted-foreground">
               {['RoPE 旋转位置编码', 'SwiGLU 激活函数', 'RMSNorm 归一化', 'GQA 分组查询注意力', '权重绑定 WeightTying', '混合精度量化'].map((f, i) => (
                 <span key={i} className="flex items-center gap-1.5">
-                  <span className="w-1 h-1 rounded-full bg-blue-500 shrink-0" />{f}
+                  <span className="w-1 h-1 rounded-full bg-primary shrink-0" />{f}
                 </span>
               ))}
             </div>
@@ -376,14 +376,14 @@ function Landing({ onStart, dark, setDark }: { onStart: () => void; dark: boolea
 
           <button
             onClick={onStart}
-            className="group inline-flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white rounded-2xl px-7 h-12 text-sm font-semibold shadow-lg shadow-blue-500/25 transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/30 hover:-translate-y-0.5 active:translate-y-0 active:shadow-lg"
+            className="group inline-flex items-center justify-center gap-2 bg-primary hover:bg-primary/90 text-white rounded-2xl px-7 h-12 text-sm font-semibold shadow-lg shadow-primary/25 transition-all duration-300 hover:shadow-xl hover:shadow-primary/30 hover:-translate-y-0.5 active:translate-y-0 active:shadow-lg"
           >
             开始聊天 <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-0.5" />
           </button>
         </div>
       </main>
 
-      <footer className="h-12 flex items-center justify-center text-[11px] text-neutral-300 dark:text-neutral-700 gap-1.5">
+      <footer className="h-12 flex items-center justify-center text-[11px] text-muted-foreground/60 dark:text-foreground/80 gap-1.5">
         <span>FishLab-ai</span><span>·</span><span>Built with Rust</span>
       </footer>
     </div>
@@ -518,7 +518,8 @@ function Chat({ onBack, dark, setDark }: { onBack: () => void; dark: boolean; se
     startTypewriter(aid);
 
     try {
-      const res = await fetch('/api/chat', {
+      const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '';
+      const res = await fetch(`${API_BASE}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: content, conversationId: convId.current }),
@@ -579,24 +580,24 @@ function Chat({ onBack, dark, setDark }: { onBack: () => void; dark: boolean; se
   ];
 
   return (
-    <div className="h-screen flex flex-col bg-gradient-to-b from-white to-blue-50/20 dark:from-neutral-950 dark:to-neutral-900/30 transition-colors duration-500">
+    <div className="h-screen flex flex-col bg-background transition-colors duration-500">
       {/* 顶栏 */}
-      <header className="h-12 flex items-center justify-between px-4 border-b border-neutral-200/60 dark:border-neutral-800/40 shrink-0 bg-white/80 dark:bg-neutral-950/80 backdrop-blur-xl z-10">
+      <header className="h-12 flex items-center justify-between px-4 border-b border-border shrink-0 bg-white/80 dark:bg-background backdrop-blur-xl z-10">
         <div className="flex items-center gap-2">
-          <button onClick={onBack} className="h-8 w-8 rounded-lg flex items-center justify-center text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">
+          <button onClick={onBack} className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-muted-foreground dark:hover:text-muted-foreground/60 hover:bg-muted dark:hover:bg-muted transition-colors">
             <X className="w-4 h-4" />
           </button>
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm shadow-blue-500/20">
+            <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center shadow-sm shadow-primary/20">
               <Fish className="w-3.5 h-3.5 text-white" />
             </div>
-            <span className="font-semibold text-sm text-neutral-800 dark:text-neutral-200">FishAI</span>
+            <span className="font-semibold text-sm text-foreground dark:text-muted-foreground/40">FishAI</span>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <ThemeToggle dark={dark} setDark={setDark} />
           <a href="https://github.com/FishLab-ai" target="_blank" rel="noopener noreferrer"
-            className="h-8 w-8 rounded-lg flex items-center justify-center text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors">
+            className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-muted-foreground dark:hover:text-muted-foreground/60 hover:bg-muted dark:hover:bg-muted transition-colors">
             <Github className="w-4 h-4" />
           </a>
         </div>
@@ -607,21 +608,21 @@ function Chat({ onBack, dark, setDark }: { onBack: () => void; dark: boolean; se
         <div className="max-w-2xl mx-auto px-4 py-6">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center min-h-[55vh] gap-6">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-xl shadow-blue-500/20">
+              <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center shadow-xl shadow-primary/20">
                 <Fish className="w-7 h-7 text-white" />
               </div>
               <div className="text-center space-y-1.5">
-                <p className="text-base font-medium text-neutral-700 dark:text-neutral-300">有什么可以帮你的？</p>
-                <p className="text-xs text-neutral-400 dark:text-neutral-500">试试下面的快捷指令</p>
+                <p className="text-base font-medium text-foreground/80">有什么可以帮你的？</p>
+                <p className="text-xs text-muted-foreground dark:text-muted-foreground">试试下面的快捷指令</p>
               </div>
               <div className="flex flex-col sm:flex-row gap-2 w-full max-w-lg">
                 {suggestions.map((s, i) => (
                   <button key={i} onClick={() => send(s.prompt)}
-                    className="flex-1 flex items-center gap-2.5 p-3 rounded-xl border border-neutral-200/80 dark:border-neutral-800/60 hover:border-blue-300 dark:hover:border-blue-700 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 text-left transition-all duration-200 hover:shadow-sm group">
-                    <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center shrink-0 group-hover:bg-blue-100 dark:group-hover:bg-blue-900/40 transition-colors">
-                      <s.icon className="w-4 h-4 text-blue-500" />
+                    className="flex-1 flex items-center gap-2.5 p-3 rounded-xl border border-border/80 dark:border-border hover:border-primary/40 dark:hover:border-primary hover:bg-accent/50 dark:hover:bg-primary/15 text-left transition-all duration-200 hover:shadow-sm group">
+                    <div className="w-8 h-8 rounded-lg bg-accent/60 dark:bg-primary/25 flex items-center justify-center shrink-0 group-hover:bg-accent dark:group-hover:bg-primary/20 transition-colors">
+                      <s.icon className="w-4 h-4 text-primary" />
                     </div>
-                    <span className="text-xs font-medium text-neutral-700 dark:text-neutral-300">{s.label}</span>
+                    <span className="text-xs font-medium text-foreground/80">{s.label}</span>
                   </button>
                 ))}
               </div>
@@ -633,14 +634,14 @@ function Chat({ onBack, dark, setDark }: { onBack: () => void; dark: boolean; se
                 return (
                   <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} animate-[fadeSlideIn_0.25s_ease-out]`}>
                     {msg.role === 'assistant' && (
-                      <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center mr-2.5 mt-0.5 shrink-0 shadow-sm shadow-blue-500/20">
+                      <div className="w-7 h-7 rounded-lg bg-primary flex items-center justify-center mr-2.5 mt-0.5 shrink-0 shadow-sm shadow-primary/20">
                         <Fish className="w-3.5 h-3.5 text-white" />
                       </div>
                     )}
                     <div className={`max-w-[80%] rounded-2xl text-sm leading-relaxed ${
                       msg.role === 'user'
-                        ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-2.5 shadow-md shadow-blue-500/15'
-                        : 'bg-white dark:bg-neutral-900/70 text-neutral-800 dark:text-neutral-200 border border-neutral-200/80 dark:border-neutral-800/50 px-4 py-3 shadow-sm'
+                        ? 'bg-gradient-to-r from-primary to-primary text-white px-4 py-2.5 shadow-md shadow-primary/15'
+                        : 'bg-white dark:bg-foreground/70 text-foreground dark:text-muted-foreground/40 border border-border/80 dark:border-border px-4 py-3 shadow-sm'
                     }`}>
                       {msg.role === 'assistant' ? (
                         <>
@@ -648,13 +649,13 @@ function Chat({ onBack, dark, setDark }: { onBack: () => void; dark: boolean; se
                             <div className="prose-fishai"><Md text={msg.content} /></div>
                           ) : (
                             <div className="flex items-center gap-1.5 py-1">
-                              <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-[dotBounce_1.4s_ease-in-out_infinite]" />
-                              <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-[dotBounce_1.4s_ease-in-out_0.2s_infinite]" />
-                              <div className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-[dotBounce_1.4s_ease-in-out_0.4s_infinite]" />
+                              <div className="w-1.5 h-1.5 rounded-full bg-primary/80 animate-[dotBounce_1.4s_ease-in-out_infinite]" />
+                              <div className="w-1.5 h-1.5 rounded-full bg-primary/80 animate-[dotBounce_1.4s_ease-in-out_0.2s_infinite]" />
+                              <div className="w-1.5 h-1.5 rounded-full bg-primary/80 animate-[dotBounce_1.4s_ease-in-out_0.4s_infinite]" />
                             </div>
                           )}
                           {isStreaming && msg.content && (
-                            <span className="inline-block w-[2px] h-[15px] bg-blue-500 ml-0.5 align-middle rounded-full animate-[cursorBreathe_1.2s_ease-in-out_infinite]" />
+                            <span className="inline-block w-[2px] h-[15px] bg-primary ml-0.5 align-middle rounded-full animate-[cursorBreathe_1.2s_ease-in-out_infinite]" />
                           )}
                         </>
                       ) : (
@@ -674,28 +675,28 @@ function Chat({ onBack, dark, setDark }: { onBack: () => void; dark: boolean; se
       <div className={`relative transition-all duration-300 ${showScrollBtn ? 'h-10' : 'h-0'}`}>
         {showScrollBtn && (
           <button onClick={() => { isNearBottomRef.current = true; scrollToBottom(); setShowScrollBtn(false); }}
-            className="absolute -top-5 left-1/2 -translate-x-1/2 h-9 px-3.5 rounded-full bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 shadow-lg flex items-center gap-1.5 text-xs font-medium text-neutral-500 dark:text-neutral-400 hover:text-blue-500 dark:hover:text-blue-400 transition-all duration-200 hover:shadow-xl hover:border-blue-300 dark:hover:border-blue-600 z-10">
+            className="absolute -top-5 left-1/2 -translate-x-1/2 h-9 px-3.5 rounded-full bg-white dark:bg-muted border border-border dark:border-border shadow-lg flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-primary dark:hover:text-primary transition-all duration-200 hover:shadow-xl hover:border-primary/40 dark:hover:border-primary z-10">
             <ChevronDown className="w-3.5 h-3.5" />回到底部
           </button>
         )}
       </div>
 
       {/* 输入区 */}
-      <footer className="border-t border-neutral-200/60 dark:border-neutral-800/40 p-3 sm:p-4 shrink-0 bg-white/80 dark:bg-neutral-950/80 backdrop-blur-xl">
+      <footer className="border-t border-border p-3 sm:p-4 shrink-0 bg-white/80 dark:bg-background backdrop-blur-xl">
         <div className="max-w-2xl mx-auto flex gap-2.5 items-end">
           <div className="flex-1">
             <Textarea ref={textareaRef} value={input} onChange={e => setInput(e.target.value)} onKeyDown={onKey}
               placeholder="输入消息…"
-              className="min-h-[44px] max-h-[160px] resize-none text-sm bg-neutral-50 dark:bg-neutral-900 border-neutral-200 dark:border-neutral-800 focus-visible:ring-blue-500/30 focus-visible:border-blue-400 rounded-xl transition-all duration-200 placeholder:text-neutral-400 dark:placeholder:text-neutral-600"
+              className="min-h-[44px] max-h-[160px] resize-none text-sm bg-background dark:bg-foreground border-border dark:border-border focus-visible:ring-primary/30 focus-visible:border-primary/60 rounded-xl transition-all duration-200 placeholder:text-muted-foreground dark:placeholder:text-muted-foreground"
               rows={1} disabled={streaming} />
           </div>
           <button onClick={() => send(input)} disabled={!input.trim() || streaming}
-            className="h-[44px] w-[44px] rounded-xl bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white shrink-0 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-all duration-200 shadow-lg shadow-blue-500/20 hover:shadow-xl hover:shadow-blue-500/25 active:scale-95">
+            className="h-[44px] w-[44px] rounded-xl bg-primary hover:bg-primary/90 text-white shrink-0 disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center transition-all duration-200 shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/25 active:scale-95">
             <Send className="w-4 h-4" />
           </button>
         </div>
         <div className="max-w-2xl mx-auto mt-1.5 text-center">
-          <span className="text-[10px] text-neutral-300 dark:text-neutral-700">FishAI · 基于 Rust 推理引擎 · 混合精度量化</span>
+          <span className="text-[10px] text-muted-foreground/60 dark:text-foreground/80">FishAI · 基于 Rust 推理引擎 · 混合精度量化</span>
         </div>
       </footer>
     </div>
