@@ -22,15 +22,18 @@ import {
   Trash2,
   Pencil,
   Check,
-  StickyNote,
+  BookMarked,
+  Pin,
+  PinOff,
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
-interface MemoryItem {
+interface NoteItem {
   id: string;
-  type: 'persistent' | 'active';
+  type: string;
   content: string;
   category: string;
+  pinned: boolean;
   accessCount: number;
   source: string;
   createdAt: string;
@@ -60,34 +63,34 @@ const MEMORY_MODES: { key: 'aggressive' | 'balanced' | 'passive'; label: string;
 export function SettingsDialog() {
   const { settingsOpen, setSettingsOpen, themeMode, setThemeMode, memoryMode, setMemoryMode, user } = useAppStore();
 
-  const [memories, setMemories] = useState<MemoryItem[]>([]);
-  const [memLoading, setMemLoading] = useState(false);
-  const [memTab, setMemTab] = useState<'active' | 'persistent'>('active');
+  const [notes, setNotes] = useState<NoteItem[]>([]);
+  const [notesLoading, setNotesLoading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState('');
   const [creating, setCreating] = useState(false);
   const [newContent, setNewContent] = useState('');
   const [newCategory, setNewCategory] = useState('general');
+  const [newPinned, setNewPinned] = useState(false);
 
-  const fetchMemories = useCallback(async () => {
+  const fetchNotes = useCallback(async () => {
     if (!user) return;
-    setMemLoading(true);
+    setNotesLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/memory?userId=${user.id}&type=${memTab}`);
+      const res = await fetch(`${API_BASE}/api/memory?userId=${user.id}&type=active`);
       if (res.ok) {
         const data = await res.json();
-        setMemories(data);
+        setNotes(data as NoteItem[]);
       }
     } catch {
       // Ignore
     } finally {
-      setMemLoading(false);
+      setNotesLoading(false);
     }
-  }, [user, memTab]);
+  }, [user]);
 
   useEffect(() => {
-    if (settingsOpen) fetchMemories();
-  }, [settingsOpen, fetchMemories]);
+    if (settingsOpen) fetchNotes();
+  }, [settingsOpen, fetchNotes]);
 
   const handleCreate = async () => {
     if (!user) return;
@@ -100,13 +103,14 @@ export function SettingsDialog() {
       const res = await fetch(`${API_BASE}/api/memory`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id, type: memTab, content, category: newCategory }),
+        body: JSON.stringify({ userId: user.id, type: 'active', content, category: newCategory, pinned: newPinned }),
       });
       if (res.ok) {
         setCreating(false);
         setNewContent('');
         setNewCategory('general');
-        fetchMemories();
+        setNewPinned(false);
+        fetchNotes();
       }
     } catch {
       toast({ title: '创建失败', variant: 'destructive' });
@@ -122,10 +126,26 @@ export function SettingsDialog() {
       });
       if (res.ok) {
         setEditingId(null);
-        fetchMemories();
+        fetchNotes();
       }
     } catch {
       toast({ title: '保存失败', variant: 'destructive' });
+    }
+  };
+
+  const handleTogglePin = async (id: string, currentPinned: boolean) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/memory`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, pinned: !currentPinned }),
+      });
+      if (res.ok) {
+        fetchNotes();
+        toast({ title: currentPinned ? '已取消标记' : '已标记为重要' });
+      }
+    } catch {
+      toast({ title: '操作失败', variant: 'destructive' });
     }
   };
 
@@ -134,16 +154,15 @@ export function SettingsDialog() {
       const res = await fetch(`${API_BASE}/api/memory?id=${id}`, { method: 'DELETE' });
       if (res.ok) {
         if (editingId === id) setEditingId(null);
-        fetchMemories();
+        fetchNotes();
       }
     } catch {
       toast({ title: '删除失败', variant: 'destructive' });
     }
   };
 
-  const activeMemories = memories.filter((m) => m.type === 'active');
-  const persistentMemories = memories.filter((m) => m.type === 'persistent');
-  const displayMemories = memTab === 'active' ? activeMemories : persistentMemories;
+  const pinnedNotes = notes.filter((n) => n.pinned);
+  const normalNotes = notes.filter((n) => !n.pinned);
 
   return (
     <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
@@ -184,7 +203,7 @@ export function SettingsDialog() {
           {/* ── Memory Frequency ── */}
           <section>
             <h3 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 mb-1">记忆频率</h3>
-            <p className="text-[11px] text-neutral-400 dark:text-neutral-500 mb-3">控制 AI 主动记住信息的积极程度</p>
+            <p className="text-[11px] text-neutral-400 dark:text-neutral-500 mb-3">控制 AI 记住信息的积极程度，聊得越多它越记得牢</p>
             <div className="space-y-1.5">
               {MEMORY_MODES.map((mode) => {
                 const Icon = mode.icon;
@@ -215,18 +234,21 @@ export function SettingsDialog() {
             </div>
           </section>
 
-          {/* ── Active Memories ── */}
+          {/* ── Notebook ── */}
           <section>
             <div className="flex items-center justify-between mb-3">
               <div>
-                <h3 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200">记忆本</h3>
-                <p className="text-[11px] text-neutral-400 dark:text-neutral-500 mt-0.5">查看和管理你的记忆</p>
+                <h3 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 flex items-center gap-1.5">
+                  <BookMarked className="w-4 h-4" />
+                  记事本
+                </h3>
+                <p className="text-[11px] text-neutral-400 dark:text-neutral-500 mt-0.5">跨所有对话 · 重要的直接注入，普通的留给AI检索</p>
               </div>
               {user && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => { setCreating(true); setNewContent(''); setNewCategory('general'); }}
+                  onClick={() => { setCreating(true); setNewContent(''); setNewCategory('general'); setNewPinned(false); }}
                   className="h-7 w-7 p-0 text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/50"
                   disabled={creating}
                 >
@@ -237,60 +259,39 @@ export function SettingsDialog() {
 
             {!user ? (
               <div className="py-8 text-center rounded-xl border border-dashed border-neutral-200 dark:border-neutral-800">
-                <p className="text-xs text-neutral-400 dark:text-neutral-600">登录后使用记忆</p>
+                <p className="text-xs text-neutral-400 dark:text-neutral-600">登录后使用记事本</p>
               </div>
             ) : (
               <>
-                <div className="flex gap-1 mb-3">
-                  <button
-                    onClick={() => { setMemTab('active'); setCreating(false); setEditingId(null); }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                      memTab === 'active'
-                        ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-600 dark:text-blue-400'
-                        : 'text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300'
-                    }`}
-                  >
-                    <StickyNote className="w-3 h-3" />
-                    主动记忆
-                  </button>
-                  <button
-                    onClick={() => { setMemTab('persistent'); setCreating(false); setEditingId(null); }}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                      memTab === 'persistent'
-                        ? 'bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400'
-                        : 'text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300'
-                    }`}
-                  >
-                    <Brain className="w-3 h-3" />
-                    持久记忆
-                  </button>
-                </div>
-
-                <div className="text-[10px] text-neutral-400 dark:text-neutral-500 mb-2">
-                  {memTab === 'active'
-                    ? '你主动记下的内容，所有对话立即可见'
-                    : '自然积累的记忆，多提几次就记住了'}
-                </div>
-
                 {creating && (
-                  <div className={`rounded-xl border p-3 space-y-2 mb-2 ${
-                    memTab === 'active'
-                      ? 'border-blue-200 dark:border-blue-800/50 bg-blue-50/30 dark:bg-blue-950/20'
-                      : 'border-amber-200 dark:border-amber-800/50 bg-amber-50/30 dark:bg-amber-950/20'
-                  }`}>
-                    <select
-                      value={newCategory}
-                      onChange={(e) => setNewCategory(e.target.value)}
-                      className="text-xs bg-transparent border border-neutral-200 dark:border-neutral-700 rounded px-1.5 py-0.5 text-neutral-600 dark:text-neutral-400"
-                    >
-                      {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
-                        <option key={k} value={k}>{v}</option>
-                      ))}
-                    </select>
+                  <div className="rounded-xl border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/30 dark:bg-emerald-950/20 p-3 space-y-2 mb-2">
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={newCategory}
+                        onChange={(e) => setNewCategory(e.target.value)}
+                        className="text-xs bg-transparent border border-neutral-200 dark:border-neutral-700 rounded px-1.5 py-0.5 text-neutral-600 dark:text-neutral-400"
+                      >
+                        {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
+                          <option key={k} value={k}>{v}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setNewPinned(!newPinned)}
+                        className={`inline-flex items-center gap-1 h-6 px-2 rounded-md text-[10px] font-medium transition-all border ${
+                          newPinned
+                            ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300'
+                            : 'border-neutral-200 dark:border-neutral-700 text-neutral-400'
+                        }`}
+                      >
+                        {newPinned ? <Pin className="w-2.5 h-2.5" /> : <PinOff className="w-2.5 h-2.5" />}
+                        {newPinned ? '重要' : '普通'}
+                      </button>
+                    </div>
                     <textarea
                       value={newContent}
                       onChange={(e) => setNewContent(e.target.value)}
-                      placeholder={memTab === 'active' ? '写一条主动记忆...' : '记一条持久记忆...'}
+                      placeholder="写一条笔记..."
                       rows={3}
                       className="w-full text-xs bg-transparent border-none outline-none resize-none placeholder:text-neutral-400 text-neutral-600 dark:text-neutral-400 leading-relaxed"
                       autoFocus
@@ -299,7 +300,7 @@ export function SettingsDialog() {
                       <Button variant="ghost" size="sm" className="h-6 text-[11px] text-neutral-400" onClick={() => setCreating(false)}>
                         取消
                       </Button>
-                      <Button size="sm" className={`h-6 text-[11px] text-white ${memTab === 'active' ? 'bg-blue-500 hover:bg-blue-600' : 'bg-amber-500 hover:bg-amber-600'}`} onClick={handleCreate}>
+                      <Button size="sm" className="h-6 text-[11px] text-white bg-emerald-500 hover:bg-emerald-600" onClick={handleCreate}>
                         保存
                       </Button>
                     </div>
@@ -307,26 +308,28 @@ export function SettingsDialog() {
                 )}
 
                 <div className="max-h-60 overflow-y-auto space-y-2">
-                  {memLoading && displayMemories.length === 0 ? (
+                  {notesLoading && notes.length === 0 ? (
                     <div className="py-6 text-center">
                       <p className="text-xs text-neutral-400">加载中...</p>
                     </div>
-                  ) : displayMemories.length === 0 ? (
+                  ) : notes.length === 0 ? (
                     <div className="py-6 text-center">
-                      <p className="text-xs text-neutral-400 dark:text-neutral-600">
-                        {memTab === 'active' ? '还没有主动记忆' : '还没有持久记忆'}
-                      </p>
+                      <p className="text-xs text-neutral-400 dark:text-neutral-600">记事本是空的</p>
                       <p className="text-[10px] text-neutral-300 dark:text-neutral-700 mt-1">
-                        {memTab === 'active' ? '点 + 新建，或让 AI 帮你记' : '多聊几次，AI 自然会记住'}
+                        点 + 新建笔记，或让 AI 帮你记
                       </p>
                     </div>
                   ) : (
-                    displayMemories.map((mem) => (
+                    notes.map((note) => (
                       <div
-                        key={mem.id}
-                        className="group rounded-xl border border-neutral-200/60 dark:border-neutral-800/40 bg-white dark:bg-neutral-800/30 p-3 transition-all duration-150 hover:border-neutral-300 dark:hover:border-neutral-700/60"
+                        key={note.id}
+                        className={`group rounded-xl border p-3 transition-all duration-150 hover:border-neutral-300 dark:hover:border-neutral-700/60 ${
+                          note.pinned
+                            ? 'border-amber-200/60 dark:border-amber-800/30 bg-amber-50/30 dark:bg-amber-950/10'
+                            : 'border-neutral-200/60 dark:border-neutral-800/40 bg-white dark:bg-neutral-800/30'
+                        }`}
                       >
-                        {editingId === mem.id ? (
+                        {editingId === note.id ? (
                           <div className="space-y-2">
                             <textarea
                               value={editContent}
@@ -338,7 +341,7 @@ export function SettingsDialog() {
                               <Button variant="ghost" size="sm" className="h-6 text-[11px] text-neutral-400" onClick={() => setEditingId(null)}>
                                 取消
                               </Button>
-                              <Button size="sm" className="h-6 text-[11px] bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => handleUpdate(mem.id)}>
+                              <Button size="sm" className="h-6 text-[11px] bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => handleUpdate(note.id)}>
                                 <Check className="w-3 h-3 mr-1" />
                                 保存
                               </Button>
@@ -348,26 +351,36 @@ export function SettingsDialog() {
                           <>
                             <div className="flex items-start justify-between gap-2">
                               <div className="flex items-center gap-1.5 min-w-0">
-                                <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 ${
-                                  memTab === 'active'
-                                    ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-500 dark:text-blue-400'
-                                    : 'bg-amber-50 dark:bg-amber-950/30 text-amber-500 dark:text-amber-400'
-                                }`}>
-                                  {CATEGORY_LABELS[mem.category] || mem.category}
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-500 dark:text-emerald-400">
+                                  {CATEGORY_LABELS[note.category] || note.category}
                                 </span>
-                                {mem.accessCount >= 3 && memTab === 'persistent' && (
-                                  <span className="text-[10px] text-amber-500 dark:text-amber-400 font-medium">牢固</span>
+                                {note.pinned && (
+                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400">
+                                    <Pin className="w-2 h-2" />
+                                    重要
+                                  </span>
                                 )}
                               </div>
                               <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
                                 <button
-                                  onClick={() => { setEditingId(mem.id); setEditContent(mem.content); }}
+                                  onClick={() => handleTogglePin(note.id, note.pinned)}
+                                  className={`h-5 w-5 rounded flex items-center justify-center transition-all ${
+                                    note.pinned
+                                      ? 'text-amber-500 hover:text-amber-600'
+                                      : 'text-neutral-300 dark:text-neutral-600 hover:text-amber-500'
+                                  }`}
+                                  title={note.pinned ? '取消重要' : '标记为重要'}
+                                >
+                                  <Pin className="w-3 h-3" />
+                                </button>
+                                <button
+                                  onClick={() => { setEditingId(note.id); setEditContent(note.content); }}
                                   className="h-5 w-5 rounded flex items-center justify-center text-neutral-300 dark:text-neutral-600 hover:text-emerald-500 transition-all"
                                 >
                                   <Pencil className="w-3 h-3" />
                                 </button>
                                 <button
-                                  onClick={() => handleDelete(mem.id)}
+                                  onClick={() => handleDelete(note.id)}
                                   className="h-5 w-5 rounded flex items-center justify-center text-neutral-300 dark:text-neutral-600 hover:text-red-500 transition-all"
                                 >
                                   <Trash2 className="w-3 h-3" />
@@ -375,7 +388,7 @@ export function SettingsDialog() {
                               </div>
                             </div>
                             <p className="mt-1.5 text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                              {mem.content}
+                              {note.content}
                             </p>
                           </>
                         )}
