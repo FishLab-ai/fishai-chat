@@ -34,7 +34,7 @@ export function ChatInput({ input, setInput, onSend, onStop, streaming }: ChatIn
   };
 
   return (
-    <div className="shrink-0 px-3 pb-4 pt-2 bg-white dark:bg-neutral-900 border-t border-neutral-100 dark:border-neutral-800/50">
+    <div className="px-3 pb-4 pt-3">
       <div className="max-w-2xl mx-auto">
         <div className="glass-input rounded-2xl shadow-sm overflow-hidden">
           <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">

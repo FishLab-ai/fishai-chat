@@ -339,30 +339,14 @@ export default function ChatPage() {
   );
 
   return (
-    <div className="fixed inset-0 flex flex-col overflow-hidden bg-background">
-      <header className="shrink-0 flex items-center h-11 px-3 z-10">
-        <button
-          onClick={() => setSidebarOpen(true)}
-          className="h-8 w-8 rounded-lg flex items-center justify-center text-neutral-400 dark:text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all duration-200"
-          title="聊天记录"
-        >
-          <AlignLeft className="w-4 h-4" />
-        </button>
-        <button
-          onClick={handleNewChat}
-          className="h-8 w-8 rounded-lg flex items-center justify-center text-neutral-400 dark:text-neutral-500 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all duration-200"
-          title="新对话"
-        >
-          <Plus className="w-4 h-4" />
-        </button>
-      </header>
-
+    <div className="fixed inset-0 overflow-hidden bg-background">
+      {/* 消息区：占满全屏，自由滚动 */}
       <main
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto scroll-smooth"
+        className="h-full overflow-y-auto scroll-smooth"
       >
-        <div className="max-w-2xl mx-auto px-4 py-6">
+        <div className="max-w-2xl mx-auto px-4 pt-14 pb-52">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center min-h-[55vh] gap-6">
               <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-xl shadow-emerald-500/20">
@@ -415,8 +399,27 @@ export default function ChatPage() {
         </div>
       </main>
 
+      {/* 顶部栏：悬浮在消息上方 */}
+      <header className="fixed top-0 left-0 right-0 z-20 flex items-center h-11 px-3 backdrop-blur-xl bg-white/70 dark:bg-neutral-900/70">
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="h-8 w-8 rounded-lg flex items-center justify-center text-neutral-400 dark:text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all duration-200"
+          title="聊天记录"
+        >
+          <AlignLeft className="w-4 h-4" />
+        </button>
+        <button
+          onClick={handleNewChat}
+          className="h-8 w-8 rounded-lg flex items-center justify-center text-neutral-400 dark:text-neutral-500 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all duration-200"
+          title="新对话"
+        >
+          <Plus className="w-4 h-4" />
+        </button>
+      </header>
+
+      {/* 回到底部按钮 */}
       {showScrollBtn && (
-        <div className="shrink-0 flex justify-center -mt-10 pb-1 z-10 pointer-events-none">
+        <div className="fixed bottom-40 left-0 right-0 flex justify-center z-20 pointer-events-none">
           <button
             onClick={() => {
               isNearBottomRef.current = true;
@@ -431,13 +434,16 @@ export default function ChatPage() {
         </div>
       )}
 
-      <ChatInput
-        input={input}
-        setInput={setInput}
-        onSend={() => send(input)}
-        onStop={handleStop}
-        streaming={streaming}
-      />
+      {/* 输入栏：悬浮在消息上方 */}
+      <div className="fixed bottom-0 left-0 right-0 z-20 backdrop-blur-xl bg-white/70 dark:bg-neutral-900/70">
+        <ChatInput
+          input={input}
+          setInput={setInput}
+          onSend={() => send(input)}
+          onStop={handleStop}
+          streaming={streaming}
+        />
+      </div>
 
       <Sidebar />
       <SettingsDialog />
