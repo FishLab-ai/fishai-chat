@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Noto_Sans_SC } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import { CookieConsent } from "@/components/cookie-consent";
+import { Nav } from "@/components/nav";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -24,6 +26,9 @@ export const metadata: Metadata = {
   description: "FishAI — FishLab-ai 自研 AI 助手，Rust 推理引擎，4-bit 量化，轻量而聪明",
   keywords: ["FishAI", "FishLab-ai", "Rust", "GPT", "4-bit", "AI", "self-developed"],
   authors: [{ name: "FishLab-ai" }],
+  icons: {
+    icon: "/logo.svg",
+  },
   openGraph: {
     title: "FishAI - FishLab-ai 自研 AI 助手",
     description: "Rust Engine + 4-bit Quantized, No Git LFS Required",
@@ -48,15 +53,35 @@ export default function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: `
           (function(){
-            try{var t=localStorage.getItem('fishai-theme');if(t==='dark')document.documentElement.classList.add('dark')}catch(e){}
+            try {
+              var mode = localStorage.getItem('fishai-theme-mode');
+              if (!mode) mode = 'system';
+              var isDark = false;
+              if (mode === 'dark') {
+                isDark = true;
+              } else if (mode === 'light') {
+                isDark = false;
+              } else {
+                isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+              }
+              if (isDark) {
+                document.documentElement.classList.add('dark');
+              } else {
+                document.documentElement.classList.remove('dark');
+              }
+            } catch(e) {}
           })()
         ` }} />
       </head>
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${notoSansSC.variable} antialiased bg-background text-foreground`}
       >
-        {children}
+        <div className="min-h-screen flex flex-col">
+          <Nav />
+          {children}
+        </div>
         <Toaster />
+        <CookieConsent />
       </body>
     </html>
   );

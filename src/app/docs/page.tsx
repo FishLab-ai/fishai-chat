@@ -1,6 +1,5 @@
-import Link from "next/link";
 import type { Metadata } from "next";
-import { ArrowLeft, Github, Fish, Palette, Server, Cloud, BookOpen } from "lucide-react";
+import { Github, Fish, Palette, Server, Cloud, BookOpen } from "lucide-react";
 
 export const metadata: Metadata = {
   title: "FishAI 文档 · FishLab-ai",
@@ -18,35 +17,10 @@ const SECTIONS = [
 
 export default function DocsPage() {
   return (
-    <div className="min-h-screen bg-background text-foreground">
-      <header className="sticky top-0 z-30 border-b border-border bg-background/80 backdrop-blur-md">
-        <div className="mx-auto max-w-6xl px-6 h-14 flex items-center justify-between">
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            返回聊天
-          </Link>
-          <div className="flex items-center gap-2 text-sm font-semibold">
-            <Fish className="w-4 h-4 text-primary" />
-            FishAI 文档
-          </div>
-          <a
-            href="https://github.com/FishLab-ai"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-primary transition-colors"
-          >
-            <Github className="w-4 h-4" />
-            GitHub
-          </a>
-        </div>
-      </header>
-
+    <div className="flex-1 bg-background text-foreground overflow-y-auto">
       <div className="mx-auto max-w-6xl px-6 py-10 flex gap-10">
         <aside className="hidden md:block w-48 flex-shrink-0">
-          <nav className="sticky top-24 space-y-1">
+          <nav className="sticky top-20 space-y-1">
             <p className="px-3 mb-2 text-xs uppercase tracking-wider text-muted-foreground">目录</p>
             {SECTIONS.map((s) => (
               <a
