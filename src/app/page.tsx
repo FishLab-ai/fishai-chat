@@ -2,10 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Fish, ArrowRight, BookOpen, User } from 'lucide-react';
+import { Fish, ArrowRight, BookOpen, User, Settings, LogOut, ArrowLeftRight, Trash2 } from 'lucide-react';
 import { useAppStore, type UserInfo } from '@/lib/store';
 import { API_BASE } from '@/lib/api';
 import { AuthDialog } from '@/components/auth-dialog';
+import { UserProfileDialog } from '@/components/user-profile-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { toast } from '@/hooks/use-toast';
 
 function getCookie(name: string): string | null {
@@ -18,8 +26,9 @@ function deleteCookie(name: string) {
 }
 
 export default function HomePage() {
-  const { initAuth, setUser, user } = useAppStore();
+  const { initAuth, setUser, user, logout } = useAppStore();
   const [authOpen, setAuthOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   useEffect(() => {
     initAuth();
@@ -88,9 +97,33 @@ export default function HomePage() {
       {/* Floating login - top right */}
       <div className="fixed top-4 right-4 z-30">
         {user ? (
-          <div className="h-9 w-9 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-sm font-bold shadow-lg shadow-emerald-500/20">
-            {(user.name || user.email)[0].toUpperCase()}
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="h-9 w-9 rounded-full bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center text-white text-sm font-bold shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 transition-shadow duration-200 cursor-pointer">
+                {(user.name || user.email)[0].toUpperCase()}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" side="bottom" className="w-52">
+              <div className="px-2 py-1.5">
+                <p className="text-sm font-medium text-neutral-800 dark:text-neutral-200">{user.name || '用户'}</p>
+                <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+              </div>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => setProfileOpen(true)} className="cursor-pointer">
+                <Settings className="w-4 h-4 mr-2" />
+                用户设置
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setAuthOpen(true)} className="cursor-pointer">
+                <ArrowLeftRight className="w-4 h-4 mr-2" />
+                切换账号
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={logout} className="text-red-500 cursor-pointer">
+                <LogOut className="w-4 h-4 mr-2" />
+                退出登录
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         ) : (
           <button
             onClick={() => setAuthOpen(true)}
@@ -146,6 +179,7 @@ export default function HomePage() {
       </footer>
 
       <AuthDialog open={authOpen} onOpenChange={setAuthOpen} />
+      <UserProfileDialog open={profileOpen} onOpenChange={setProfileOpen} />
     </div>
   );
 }
