@@ -27,6 +27,7 @@ function useTextareaHeight(input: string) {
   return textareaRef;
 }
 
+/* eslint-disable max-lines-per-function */
 export function ChatInput({ input, setInput, onSend, onStop, streaming }: ChatInputProps) {
   const { deepThinking, setDeepThinking, webSearch, setWebSearch } = useAppStore();
   const { t } = useI18n();
