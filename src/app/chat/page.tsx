@@ -400,7 +400,7 @@ export default function ChatPage() {
       </main>
 
       {/* 顶部栏：悬浮在消息上方 */}
-      <header className="fixed top-0 left-0 right-0 z-20 flex items-center h-11 px-3 backdrop-blur-xl bg-white/70 dark:bg-neutral-900/70">
+      <header className="fixed top-0 left-0 right-0 z-20 flex items-center h-11 px-3">
         <button
           onClick={() => setSidebarOpen(true)}
           className="h-8 w-8 rounded-lg flex items-center justify-center text-neutral-400 dark:text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all duration-200"
@@ -435,7 +435,7 @@ export default function ChatPage() {
       )}
 
       {/* 输入栏：悬浮在消息上方 */}
-      <div className="fixed bottom-0 left-0 right-0 z-20 backdrop-blur-xl bg-white/70 dark:bg-neutral-900/70">
+      <div className="fixed bottom-0 left-0 right-0 z-20">
         <ChatInput
           input={input}
           setInput={setInput}
