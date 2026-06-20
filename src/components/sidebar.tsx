@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAppStore, type ConversationItem } from '@/lib/store';
+import { useAppStore, type ConversationItem, type UserInfo } from '@/lib/store';
 import { API_BASE } from '@/lib/api';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -26,6 +26,72 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { toast } from '@/hooks/use-toast';
 
+function ConversationList({
+  user,
+  loading,
+  conversations,
+  currentConversationId,
+  onSelectConversation,
+  onDeleteConversation,
+}: {
+  user: UserInfo | null;
+  loading: boolean;
+  conversations: ConversationItem[];
+  currentConversationId: string | null;
+  onSelectConversation: (convId: string) => void;
+  onDeleteConversation: (e: React.MouseEvent, convId: string) => void;
+}) {
+  if (!user) {
+    return (
+      <div className="px-3 py-10 text-center">
+        <p className="text-xs text-neutral-400 dark:text-neutral-600">登录后查看聊天记录</p>
+      </div>
+    );
+  }
+
+  if (loading && conversations.length === 0) {
+    return (
+      <div className="px-3 py-10 text-center">
+        <p className="text-xs text-neutral-400">加载中...</p>
+      </div>
+    );
+  }
+
+  if (conversations.length === 0) {
+    return (
+      <div className="px-3 py-10 text-center">
+        <p className="text-xs text-neutral-400 dark:text-neutral-600">暂无对话</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      {conversations.map((conv) => (
+        <div
+          key={conv.id}
+          onClick={() => onSelectConversation(conv.id)}
+          className={`group flex items-center gap-2.5 px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-150 ${
+            currentConversationId === conv.id
+              ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400'
+              : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800/50'
+          }`}
+        >
+          <MessageSquare className="w-3.5 h-3.5 shrink-0 opacity-50" />
+          <span className="flex-1 text-xs truncate">{conv.title}</span>
+          <button
+            onClick={(e) => onDeleteConversation(e, conv.id)}
+            className="opacity-0 group-hover:opacity-100 h-5 w-5 rounded-md flex items-center justify-center text-neutral-300 dark:text-neutral-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 transition-all shrink-0"
+          >
+            <Trash2 className="w-3 h-3" />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* eslint-disable max-lines-per-function */
 export function Sidebar() {
   const router = useRouter();
   const {
@@ -46,7 +112,7 @@ export function Sidebar() {
   const [closing, setClosing] = useState(false);
 
   const fetchConversations = useCallback(async () => {
-    if (!user) return;
+    if (!user) {return;}
     setLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/conversations?userId=${user.id}`);
@@ -61,12 +127,14 @@ export function Sidebar() {
     }
   }, [user, setConversations]);
 
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (sidebarOpen) {
       fetchConversations();
       setClosing(false);
     }
   }, [sidebarOpen, fetchConversations]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const handleClose = useCallback(() => {
     setClosing(true);
@@ -101,7 +169,7 @@ export function Sidebar() {
 
   const handleDeleteConversation = async (e: React.MouseEvent, convId: string) => {
     e.stopPropagation();
-    if (!user) return;
+    if (!user) {return;}
     try {
       const res = await fetch(`${API_BASE}/api/conversations`, {
         method: 'DELETE',
@@ -120,7 +188,7 @@ export function Sidebar() {
     }
   };
 
-  if (!sidebarOpen && !closing) return null;
+  if (!sidebarOpen && !closing) {return null;}
 
   return (
     <>
@@ -147,40 +215,14 @@ export function Sidebar() {
 
         <ScrollArea className="flex-1">
           <div className="p-2 space-y-0.5">
-            {!user ? (
-              <div className="px-3 py-10 text-center">
-                <p className="text-xs text-neutral-400 dark:text-neutral-600">登录后查看聊天记录</p>
-              </div>
-            ) : loading && conversations.length === 0 ? (
-              <div className="px-3 py-10 text-center">
-                <p className="text-xs text-neutral-400">加载中...</p>
-              </div>
-            ) : conversations.length === 0 ? (
-              <div className="px-3 py-10 text-center">
-                <p className="text-xs text-neutral-400 dark:text-neutral-600">暂无对话</p>
-              </div>
-            ) : (
-              conversations.map((conv) => (
-                <div
-                  key={conv.id}
-                  onClick={() => handleSelectConversation(conv.id)}
-                  className={`group flex items-center gap-2.5 px-3 py-2.5 rounded-xl cursor-pointer transition-all duration-150 ${
-                    currentConversationId === conv.id
-                      ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400'
-                      : 'text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800/50'
-                  }`}
-                >
-                  <MessageSquare className="w-3.5 h-3.5 shrink-0 opacity-50" />
-                  <span className="flex-1 text-xs truncate">{conv.title}</span>
-                  <button
-                    onClick={(e) => handleDeleteConversation(e, conv.id)}
-                    className="opacity-0 group-hover:opacity-100 h-5 w-5 rounded-md flex items-center justify-center text-neutral-300 dark:text-neutral-600 hover:text-red-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 transition-all shrink-0"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </button>
-                </div>
-              ))
-            )}
+            <ConversationList
+              user={user}
+              loading={loading}
+              conversations={conversations}
+              currentConversationId={currentConversationId}
+              onSelectConversation={handleSelectConversation}
+              onDeleteConversation={handleDeleteConversation}
+            />
           </div>
         </ScrollArea>
 

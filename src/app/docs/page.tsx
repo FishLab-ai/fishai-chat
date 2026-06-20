@@ -9,11 +9,9 @@ import {
   Server,
   Zap,
   HelpCircle,
-  Fish,
   ChevronRight,
   Menu,
-  X,
-  ExternalLink,
+  X as _X,
   ArrowLeft,
   ScrollText,
   User,
@@ -21,6 +19,27 @@ import {
 import { useRouter } from 'next/navigation';
 import { useAppStore } from '@/lib/store';
 import { AuthDialog } from '@/components/auth-dialog';
+
+// ── Helpers ──
+function getClassByColor(color: string, base: string): string {
+  if (color === 'emerald') {
+    return `${base} bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200/50 dark:border-emerald-800/30`;
+  }
+  if (color === 'amber') {
+    return `${base} bg-amber-50/50 dark:bg-amber-950/20 border-amber-200/50 dark:border-amber-800/30`;
+  }
+  return `${base} bg-red-50/50 dark:bg-red-950/20 border-red-200/50 dark:border-red-800/30`;
+}
+
+function getTextClassByColor(color: string, base: string): string {
+  if (color === 'emerald') {
+    return `${base} text-emerald-600 dark:text-emerald-400`;
+  }
+  if (color === 'amber') {
+    return `${base} text-amber-600 dark:text-amber-400`;
+  }
+  return `${base} text-red-600 dark:text-red-400`;
+}
 
 // ── Doc Section Type ──
 interface DocSection {
@@ -134,7 +153,7 @@ function Sidebar({
           </button>
           {hasChildren && isExpanded && (
             <div className="mt-0.5 space-y-0.5">
-              {renderNav(item.children!, depth + 1)}
+              {renderNav(item.children as DocSection[], depth + 1)}
             </div>
           )}
         </div>
@@ -149,6 +168,7 @@ function Sidebar({
 }
 
 // ── Content Sections ──
+/* eslint-disable max-lines-per-function */
 function GettingStarted() {
   const router = useRouter();
   return (
@@ -269,6 +289,7 @@ function GettingStarted() {
   );
 }
 
+/* eslint-disable max-lines-per-function */
 function ApiChat() {
   return (
     <div className="space-y-6">
@@ -610,6 +631,7 @@ function ArchTransformer() {
   );
 }
 
+/* eslint-disable max-lines-per-function */
 function ArchLongContext() {
   return (
     <div className="space-y-6">
@@ -620,7 +642,7 @@ function ArchLongContext() {
         <p className="text-neutral-500 dark:text-neutral-400 leading-relaxed">
           FishAI 支持高达 16M (16,777,216) Token 的上下文窗口。这不是简单的参数调大，
           而是通过三项自研技术从架构层面解决了超长上下文的内存和精度难题。
-          虽然在纯推理"聪明程度"上可能不及更大的模型，但 16M 上下文意味着你可以塞进
+          虽然在纯推理&ldquo;聪明程度&rdquo;上可能不及更大的模型，但 16M 上下文意味着你可以塞进
           整本小说、完整代码仓库、长篇论文——信息量碾压一切短上下文模型。
         </p>
       </div>
@@ -698,7 +720,7 @@ function ArchLongContext() {
           即使有了 Ring Attention 解决内存问题，16M Token 的上下文仍然面临一个根本挑战：
           不是所有信息都同等重要。一个 16M 的对话中，可能有 15M 是无关紧要的寒暄和重复，
           真正有价值的只有 1M。如果模型需要等量关注所有 Token，长上下文反而会拉低回答质量
-          （即所谓的"Lost in the Middle"问题）。Fish-Scroll 就是为了解决这一问题而设计的。
+          （即所谓的&ldquo;Lost in the Middle&rdquo;问题）。Fish-Scroll 就是为了解决这一问题而设计的。
         </p>
         <p className="text-neutral-600 dark:text-neutral-400 leading-relaxed">
           Fish-Scroll 的工作机制类似一个智能滚动窗口：
@@ -748,7 +770,7 @@ function ArchLongContext() {
         </div>
         <p className="text-neutral-600 dark:text-neutral-400 leading-relaxed">
           RoPE 旋转位置编码在训练时有一个固定的最大序列长度。如果推理时的序列长度超过训练长度，
-          位置编码的旋转角度会溢出，导致注意力计算崩溃——模型会"不知道该看哪里"。
+          位置编码的旋转角度会溢出，导致注意力计算崩溃——模型会&ldquo;不知道该看哪里&rdquo;。
           传统的解决方案是线性缩放（直接除以缩放因子），但这会让近距离 Token 的位置区分度下降，
           导致模型在短序列上也变笨。
         </p>
@@ -948,25 +970,13 @@ function ArchQuantization() {
           ].map((item) => (
             <div
               key={item.layer}
-              className={`p-4 rounded-xl border ${
-                item.color === 'emerald'
-                  ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-200/50 dark:border-emerald-800/30'
-                  : item.color === 'amber'
-                  ? 'bg-amber-50/50 dark:bg-amber-950/20 border-amber-200/50 dark:border-amber-800/30'
-                  : 'bg-red-50/50 dark:bg-red-950/20 border-red-200/50 dark:border-red-800/30'
-              }`}
+              className={getClassByColor(item.color, 'p-4 rounded-xl border')}
             >
               <div className="text-xs font-semibold uppercase tracking-wider text-neutral-400 mb-1">
                 {item.layer}
               </div>
               <div
-                className={`text-lg font-bold mb-1 ${
-                  item.color === 'emerald'
-                    ? 'text-emerald-600 dark:text-emerald-400'
-                    : item.color === 'amber'
-                    ? 'text-amber-600 dark:text-amber-400'
-                    : 'text-red-600 dark:text-red-400'
-                }`}
+                className={getTextClassByColor(item.color, 'text-lg font-bold mb-1')}
               >
                 {item.precision}
               </div>
@@ -1007,6 +1017,7 @@ function ArchQuantization() {
   );
 }
 
+/* eslint-disable max-lines-per-function */
 function Deployment() {
   return (
     <div className="space-y-6">
@@ -1288,7 +1299,7 @@ function UsageSearch() {
           联网搜索和深度思考可以同时开启。当两者都开启时，流程为：先搜索相关网页信息（search 事件），
           然后模型基于搜索结果进行深度推理（thinking 事件），最后输出正式回答（content 事件）。
           这种组合特别适合需要查证信息后进行深度分析的场景，例如：
-          "分析一下最近 AI 行业的融资趋势"——先搜索最新数据，再进行推理分析。
+          &ldquo;分析一下最近 AI 行业的融资趋势&rdquo;——先搜索最新数据，再进行推理分析。
         </p>
       </section>
     </div>
@@ -1341,7 +1352,7 @@ function FAQ() {
             a: '回答速度受多种因素影响：服务器负载、网络延迟、问题复杂度、是否开启深度思考或联网搜索等。深度思考需要额外的推理时间，联网搜索需要等待搜索结果返回。如果持续出现超时，可能是服务器资源不足，建议检查服务器配置或减少并发请求数。',
           },
         ].map((item, i) => (
-          <section key={i} className="space-y-2">
+          <section key={item.q} className="space-y-2">
             <h2 className="text-lg font-semibold text-neutral-800 dark:text-neutral-200">
               {item.q}
             </h2>
@@ -1392,6 +1403,7 @@ const SECTION_MAP: Record<string, () => React.ReactNode> = {
 };
 
 // ── Main DocsTab Component ──
+/* eslint-disable max-lines-per-function */
 export default function DocsPage() {
   const { user } = useAppStore();
   const router = useRouter();
@@ -1404,13 +1416,13 @@ export default function DocsPage() {
     setSidebarOpen(false);
     // scroll content area to top
     const el = document.getElementById('docs-content');
-    if (el) el.scrollTop = 0;
+    if (el) {el.scrollTop = 0;}
   }, []);
 
   // close sidebar on resize to desktop
   useEffect(() => {
     const handler = () => {
-      if (window.innerWidth >= 1024) setSidebarOpen(false);
+      if (window.innerWidth >= 1024) {setSidebarOpen(false);}
     };
     window.addEventListener('resize', handler);
     return () => window.removeEventListener('resize', handler);
@@ -1523,7 +1535,7 @@ function BottomNav({ activeId, onNavigate }: { activeId: string; onNavigate: (id
   const prev = idx > 0 ? flat[idx - 1] : null;
   const next = idx < flat.length - 1 ? flat[idx + 1] : null;
 
-  if (!prev && !next) return null;
+  if (!prev && !next) {return null;}
 
   return (
     <div className="flex items-center justify-between pt-6 border-t border-neutral-200 dark:border-neutral-800">

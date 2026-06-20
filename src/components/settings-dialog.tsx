@@ -9,7 +9,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { useAppStore, type ThemeMode } from '@/lib/store';
+import { useAppStore, type ThemeMode, type UserInfo } from '@/lib/store';
 import { API_BASE } from '@/lib/api';
 import {
   Sun,
@@ -60,9 +60,8 @@ const MEMORY_MODES: { key: 'aggressive' | 'balanced' | 'passive'; label: string;
   { key: 'passive', label: '被动', icon: Turtle, desc: '较少主动记忆' },
 ];
 
-export function SettingsDialog() {
-  const { settingsOpen, setSettingsOpen, themeMode, setThemeMode, memoryMode, setMemoryMode, user } = useAppStore();
-
+/* eslint-disable max-lines-per-function */
+function useNotesCRUD(user: UserInfo | null) {
   const [notes, setNotes] = useState<NoteItem[]>([]);
   const [notesLoading, setNotesLoading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -73,7 +72,7 @@ export function SettingsDialog() {
   const [newPinned, setNewPinned] = useState(false);
 
   const fetchNotes = useCallback(async () => {
-    if (!user) return;
+    if (!user) {return;}
     setNotesLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/memory?userId=${user.id}&type=active`);
@@ -88,12 +87,8 @@ export function SettingsDialog() {
     }
   }, [user]);
 
-  useEffect(() => {
-    if (settingsOpen) fetchNotes();
-  }, [settingsOpen, fetchNotes]);
-
-  const handleCreate = async () => {
-    if (!user) return;
+  const handleCreate = useCallback(async () => {
+    if (!user) {return;}
     const content = newContent.trim();
     if (!content) {
       toast({ title: '请输入内容', variant: 'destructive' });
@@ -115,9 +110,9 @@ export function SettingsDialog() {
     } catch {
       toast({ title: '创建失败', variant: 'destructive' });
     }
-  };
+  }, [user, newContent, newCategory, newPinned, fetchNotes]);
 
-  const handleUpdate = async (id: string) => {
+  const handleUpdate = useCallback(async (id: string) => {
     try {
       const res = await fetch(`${API_BASE}/api/memory`, {
         method: 'PATCH',
@@ -131,9 +126,9 @@ export function SettingsDialog() {
     } catch {
       toast({ title: '保存失败', variant: 'destructive' });
     }
-  };
+  }, [editContent, fetchNotes]);
 
-  const handleTogglePin = async (id: string, currentPinned: boolean) => {
+  const handleTogglePin = useCallback(async (id: string, currentPinned: boolean) => {
     try {
       const res = await fetch(`${API_BASE}/api/memory`, {
         method: 'PATCH',
@@ -147,22 +142,263 @@ export function SettingsDialog() {
     } catch {
       toast({ title: '操作失败', variant: 'destructive' });
     }
-  };
+  }, [fetchNotes]);
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = useCallback(async (id: string) => {
     try {
       const res = await fetch(`${API_BASE}/api/memory?id=${id}`, { method: 'DELETE' });
       if (res.ok) {
-        if (editingId === id) setEditingId(null);
+        setEditingId((prev) => prev === id ? null : prev);
         fetchNotes();
       }
     } catch {
       toast({ title: '删除失败', variant: 'destructive' });
     }
-  };
+  }, [fetchNotes]);
 
-  const pinnedNotes = notes.filter((n) => n.pinned);
-  const normalNotes = notes.filter((n) => !n.pinned);
+  return {
+    notes, notesLoading, editingId, editContent, creating,
+    newContent, newCategory, newPinned,
+    setEditingId, setEditContent, setCreating, setNewContent, setNewCategory, setNewPinned,
+    fetchNotes, handleCreate, handleUpdate, handleTogglePin, handleDelete,
+  };
+}
+
+/* eslint-disable max-lines-per-function */
+function NoteCard({
+  note,
+  editingId,
+  editContent,
+  onEditStart,
+  onEditCancel,
+  onEditContentChange,
+  onEditSave,
+  onTogglePin,
+  onDelete,
+}: {
+  note: NoteItem;
+  editingId: string | null;
+  editContent: string;
+  onEditStart: (id: string, content: string) => void;
+  onEditCancel: () => void;
+  onEditContentChange: (v: string) => void;
+  onEditSave: (id: string) => void;
+  onTogglePin: (id: string, pinned: boolean) => void;
+  onDelete: (id: string) => void;
+}) {
+  const isEditing = editingId === note.id;
+
+  return (
+    <div
+      className={`group rounded-xl border p-3 transition-all duration-150 hover:border-neutral-300 dark:hover:border-neutral-700/60 ${
+        note.pinned
+          ? 'border-amber-200/60 dark:border-amber-800/30 bg-amber-50/30 dark:bg-amber-950/10'
+          : 'border-neutral-200/60 dark:border-neutral-800/40 bg-white dark:bg-neutral-800/30'
+      }`}
+    >
+      {isEditing ? (
+        <div className="space-y-2">
+          <textarea
+            value={editContent}
+            onChange={(e) => onEditContentChange(e.target.value)}
+            rows={3}
+            className="w-full text-xs bg-transparent border-none outline-none resize-none text-neutral-600 dark:text-neutral-400 leading-relaxed"
+          />
+          <div className="flex items-center gap-2 justify-end">
+            <Button variant="ghost" size="sm" className="h-6 text-[11px] text-neutral-400" onClick={onEditCancel}>
+              取消
+            </Button>
+            <Button size="sm" className="h-6 text-[11px] bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => onEditSave(note.id)}>
+              <Check className="w-3 h-3 mr-1" />
+              保存
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-500 dark:text-emerald-400">
+                {CATEGORY_LABELS[note.category] || note.category}
+              </span>
+              {note.pinned && (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400">
+                  <Pin className="w-2 h-2" />
+                  重要
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+              <button
+                onClick={() => onTogglePin(note.id, note.pinned)}
+                className={`h-5 w-5 rounded flex items-center justify-center transition-all ${
+                  note.pinned
+                    ? 'text-amber-500 hover:text-amber-600'
+                    : 'text-neutral-300 dark:text-neutral-600 hover:text-amber-500'
+                }`}
+                title={note.pinned ? '取消重要' : '标记为重要'}
+              >
+                <Pin className="w-3 h-3" />
+              </button>
+              <button
+                onClick={() => onEditStart(note.id, note.content)}
+                className="h-5 w-5 rounded flex items-center justify-center text-neutral-300 dark:text-neutral-600 hover:text-emerald-500 transition-all"
+              >
+                <Pencil className="w-3 h-3" />
+              </button>
+              <button
+                onClick={() => onDelete(note.id)}
+                className="h-5 w-5 rounded flex items-center justify-center text-neutral-300 dark:text-neutral-600 hover:text-red-500 transition-all"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
+            </div>
+          </div>
+          <p className="mt-1.5 text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
+            {note.content}
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+function NotesList({
+  notes,
+  notesLoading,
+  editingId,
+  editContent,
+  setEditingId,
+  setEditContent,
+  onEditSave,
+  onTogglePin,
+  onDelete,
+}: {
+  notes: NoteItem[];
+  notesLoading: boolean;
+  editingId: string | null;
+  editContent: string;
+  setEditingId: (v: string | null) => void;
+  setEditContent: (v: string) => void;
+  onEditSave: (id: string) => void;
+  onTogglePin: (id: string, pinned: boolean) => void;
+  onDelete: (id: string) => void;
+}) {
+  if (notesLoading && notes.length === 0) {
+    return (
+      <div className="py-6 text-center">
+        <p className="text-xs text-neutral-400">加载中...</p>
+      </div>
+    );
+  }
+
+  if (notes.length === 0) {
+    return (
+      <div className="py-6 text-center">
+        <p className="text-xs text-neutral-400 dark:text-neutral-600">记事本是空的</p>
+        <p className="text-[10px] text-neutral-300 dark:text-neutral-700 mt-1">
+          点 + 新建笔记，或让 AI 帮你记
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-h-60 overflow-y-auto space-y-2">
+      {notes.map((note) => (
+        <NoteCard
+          key={note.id}
+          note={note}
+          editingId={editingId}
+          editContent={editContent}
+          onEditStart={(id, content) => { setEditingId(id); setEditContent(content); }}
+          onEditCancel={() => setEditingId(null)}
+          onEditContentChange={setEditContent}
+          onEditSave={onEditSave}
+          onTogglePin={onTogglePin}
+          onDelete={onDelete}
+        />
+      ))}
+    </div>
+  );
+}
+
+function CreateNoteForm({
+  newCategory,
+  newPinned,
+  newContent,
+  onCategoryChange,
+  onPinnedToggle,
+  onContentChange,
+  onCancel,
+  onSave,
+}: {
+  newCategory: string;
+  newPinned: boolean;
+  newContent: string;
+  onCategoryChange: (v: string) => void;
+  onPinnedToggle: () => void;
+  onContentChange: (v: string) => void;
+  onCancel: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <div className="rounded-xl border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/30 dark:bg-emerald-950/20 p-3 space-y-2 mb-2">
+      <div className="flex items-center gap-2">
+        <select
+          value={newCategory}
+          onChange={(e) => onCategoryChange(e.target.value)}
+          className="text-xs bg-transparent border border-neutral-200 dark:border-neutral-700 rounded px-1.5 py-0.5 text-neutral-600 dark:text-neutral-400"
+        >
+          {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
+            <option key={k} value={k}>{v}</option>
+          ))}
+        </select>
+        <button
+          type="button"
+          onClick={onPinnedToggle}
+          className={`inline-flex items-center gap-1 h-6 px-2 rounded-md text-[10px] font-medium transition-all border ${
+            newPinned
+              ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300'
+              : 'border-neutral-200 dark:border-neutral-700 text-neutral-400'
+          }`}
+        >
+          {newPinned ? <Pin className="w-2.5 h-2.5" /> : <PinOff className="w-2.5 h-2.5" />}
+          {newPinned ? '重要' : '普通'}
+        </button>
+      </div>
+      <textarea
+        value={newContent}
+        onChange={(e) => onContentChange(e.target.value)}
+        placeholder="写一条笔记..."
+        rows={3}
+        className="w-full text-xs bg-transparent border-none outline-none resize-none placeholder:text-neutral-400 text-neutral-600 dark:text-neutral-400 leading-relaxed"
+        autoFocus
+      />
+      <div className="flex items-center gap-2 justify-end">
+        <Button variant="ghost" size="sm" className="h-6 text-[11px] text-neutral-400" onClick={onCancel}>
+          取消
+        </Button>
+        <Button size="sm" className="h-6 text-[11px] text-white bg-emerald-500 hover:bg-emerald-600" onClick={onSave}>
+          保存
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/* eslint-disable max-lines-per-function */
+export function SettingsDialog() {
+  const { settingsOpen, setSettingsOpen, themeMode, setThemeMode, memoryMode, setMemoryMode, user } = useAppStore();
+
+  const notesState = useNotesCRUD(user);
+
+  // Fetch notes when dialog opens
+  useEffect(() => {
+    if (settingsOpen) {
+      notesState.fetchNotes();
+    }
+  }, [settingsOpen, notesState.fetchNotes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
@@ -248,9 +484,9 @@ export function SettingsDialog() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => { setCreating(true); setNewContent(''); setNewCategory('general'); setNewPinned(false); }}
+                  onClick={() => { notesState.setCreating(true); notesState.setNewContent(''); notesState.setNewCategory('general'); notesState.setNewPinned(false); }}
                   className="h-7 w-7 p-0 text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-950/50"
-                  disabled={creating}
+                  disabled={notesState.creating}
                 >
                   <Plus className="w-4 h-4" />
                 </Button>
@@ -263,139 +499,30 @@ export function SettingsDialog() {
               </div>
             ) : (
               <>
-                {creating && (
-                  <div className="rounded-xl border border-emerald-200 dark:border-emerald-800/50 bg-emerald-50/30 dark:bg-emerald-950/20 p-3 space-y-2 mb-2">
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={newCategory}
-                        onChange={(e) => setNewCategory(e.target.value)}
-                        className="text-xs bg-transparent border border-neutral-200 dark:border-neutral-700 rounded px-1.5 py-0.5 text-neutral-600 dark:text-neutral-400"
-                      >
-                        {Object.entries(CATEGORY_LABELS).map(([k, v]) => (
-                          <option key={k} value={k}>{v}</option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => setNewPinned(!newPinned)}
-                        className={`inline-flex items-center gap-1 h-6 px-2 rounded-md text-[10px] font-medium transition-all border ${
-                          newPinned
-                            ? 'border-amber-300 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300'
-                            : 'border-neutral-200 dark:border-neutral-700 text-neutral-400'
-                        }`}
-                      >
-                        {newPinned ? <Pin className="w-2.5 h-2.5" /> : <PinOff className="w-2.5 h-2.5" />}
-                        {newPinned ? '重要' : '普通'}
-                      </button>
-                    </div>
-                    <textarea
-                      value={newContent}
-                      onChange={(e) => setNewContent(e.target.value)}
-                      placeholder="写一条笔记..."
-                      rows={3}
-                      className="w-full text-xs bg-transparent border-none outline-none resize-none placeholder:text-neutral-400 text-neutral-600 dark:text-neutral-400 leading-relaxed"
-                      autoFocus
-                    />
-                    <div className="flex items-center gap-2 justify-end">
-                      <Button variant="ghost" size="sm" className="h-6 text-[11px] text-neutral-400" onClick={() => setCreating(false)}>
-                        取消
-                      </Button>
-                      <Button size="sm" className="h-6 text-[11px] text-white bg-emerald-500 hover:bg-emerald-600" onClick={handleCreate}>
-                        保存
-                      </Button>
-                    </div>
-                  </div>
+                {notesState.creating && (
+                  <CreateNoteForm
+                    newCategory={notesState.newCategory}
+                    newPinned={notesState.newPinned}
+                    newContent={notesState.newContent}
+                    onCategoryChange={notesState.setNewCategory}
+                    onPinnedToggle={() => notesState.setNewPinned(!notesState.newPinned)}
+                    onContentChange={notesState.setNewContent}
+                    onCancel={() => notesState.setCreating(false)}
+                    onSave={notesState.handleCreate}
+                  />
                 )}
 
-                <div className="max-h-60 overflow-y-auto space-y-2">
-                  {notesLoading && notes.length === 0 ? (
-                    <div className="py-6 text-center">
-                      <p className="text-xs text-neutral-400">加载中...</p>
-                    </div>
-                  ) : notes.length === 0 ? (
-                    <div className="py-6 text-center">
-                      <p className="text-xs text-neutral-400 dark:text-neutral-600">记事本是空的</p>
-                      <p className="text-[10px] text-neutral-300 dark:text-neutral-700 mt-1">
-                        点 + 新建笔记，或让 AI 帮你记
-                      </p>
-                    </div>
-                  ) : (
-                    notes.map((note) => (
-                      <div
-                        key={note.id}
-                        className={`group rounded-xl border p-3 transition-all duration-150 hover:border-neutral-300 dark:hover:border-neutral-700/60 ${
-                          note.pinned
-                            ? 'border-amber-200/60 dark:border-amber-800/30 bg-amber-50/30 dark:bg-amber-950/10'
-                            : 'border-neutral-200/60 dark:border-neutral-800/40 bg-white dark:bg-neutral-800/30'
-                        }`}
-                      >
-                        {editingId === note.id ? (
-                          <div className="space-y-2">
-                            <textarea
-                              value={editContent}
-                              onChange={(e) => setEditContent(e.target.value)}
-                              rows={3}
-                              className="w-full text-xs bg-transparent border-none outline-none resize-none text-neutral-600 dark:text-neutral-400 leading-relaxed"
-                            />
-                            <div className="flex items-center gap-2 justify-end">
-                              <Button variant="ghost" size="sm" className="h-6 text-[11px] text-neutral-400" onClick={() => setEditingId(null)}>
-                                取消
-                              </Button>
-                              <Button size="sm" className="h-6 text-[11px] bg-emerald-500 hover:bg-emerald-600 text-white" onClick={() => handleUpdate(note.id)}>
-                                <Check className="w-3 h-3 mr-1" />
-                                保存
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-500 dark:text-emerald-400">
-                                  {CATEGORY_LABELS[note.category] || note.category}
-                                </span>
-                                {note.pinned && (
-                                  <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400">
-                                    <Pin className="w-2 h-2" />
-                                    重要
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
-                                <button
-                                  onClick={() => handleTogglePin(note.id, note.pinned)}
-                                  className={`h-5 w-5 rounded flex items-center justify-center transition-all ${
-                                    note.pinned
-                                      ? 'text-amber-500 hover:text-amber-600'
-                                      : 'text-neutral-300 dark:text-neutral-600 hover:text-amber-500'
-                                  }`}
-                                  title={note.pinned ? '取消重要' : '标记为重要'}
-                                >
-                                  <Pin className="w-3 h-3" />
-                                </button>
-                                <button
-                                  onClick={() => { setEditingId(note.id); setEditContent(note.content); }}
-                                  className="h-5 w-5 rounded flex items-center justify-center text-neutral-300 dark:text-neutral-600 hover:text-emerald-500 transition-all"
-                                >
-                                  <Pencil className="w-3 h-3" />
-                                </button>
-                                <button
-                                  onClick={() => handleDelete(note.id)}
-                                  className="h-5 w-5 rounded flex items-center justify-center text-neutral-300 dark:text-neutral-600 hover:text-red-500 transition-all"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
-                              </div>
-                            </div>
-                            <p className="mt-1.5 text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                              {note.content}
-                            </p>
-                          </>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
+                <NotesList
+                  notes={notesState.notes}
+                  notesLoading={notesState.notesLoading}
+                  editingId={notesState.editingId}
+                  editContent={notesState.editContent}
+                  setEditingId={notesState.setEditingId}
+                  setEditContent={notesState.setEditContent}
+                  onEditSave={notesState.handleUpdate}
+                  onTogglePin={notesState.handleTogglePin}
+                  onDelete={notesState.handleDelete}
+                />
               </>
             )}
           </section>

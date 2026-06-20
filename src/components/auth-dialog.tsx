@@ -22,37 +22,33 @@ interface AuthDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
-  const { setUser } = useAppStore();
-
+function useGithubConfig(open: boolean) {
   const [githubEnabled, setGithubEnabled] = useState(false);
   const [configLoaded, setConfigLoaded] = useState(false);
 
   useEffect(() => {
-    if (open) {
-      fetch(`${API_BASE}/api/auth/github/config`)
-        .then((r) => r.json())
-        .then((data) => {
-          setGithubEnabled(data.enabled === true);
-          setConfigLoaded(true);
-        })
-        .catch(() => {
-          setGithubEnabled(false);
-          setConfigLoaded(true);
-        });
+    if (!open) {
+      return;
     }
+    fetch(`${API_BASE}/api/auth/github/config`)
+      .then((r) => r.json())
+      .then((data) => {
+        setGithubEnabled(data.enabled === true);
+        setConfigLoaded(true);
+      })
+      .catch(() => {
+        setGithubEnabled(false);
+        setConfigLoaded(true);
+      });
   }, [open]);
 
-  // Login state
+  return { githubEnabled, configLoaded };
+}
+
+function useLoginForm(setUser: (user: UserInfo) => void, onClose: () => void) {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
-
-  // Register state
-  const [regEmail, setRegEmail] = useState('');
-  const [regPassword, setRegPassword] = useState('');
-  const [regName, setRegName] = useState('');
-  const [regLoading, setRegLoading] = useState(false);
 
   const handleLogin = async () => {
     if (!loginEmail || !loginPassword) {
@@ -73,7 +69,7 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
       }
       setUser(data as UserInfo);
       toast({ title: '登录成功' });
-      onOpenChange(false);
+      onClose();
       setLoginEmail('');
       setLoginPassword('');
     } catch {
@@ -82,6 +78,15 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
       setLoginLoading(false);
     }
   };
+
+  return { loginEmail, setLoginEmail, loginPassword, setLoginPassword, loginLoading, handleLogin };
+}
+
+function useRegisterForm(setUser: (user: UserInfo) => void, onClose: () => void) {
+  const [regEmail, setRegEmail] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regName, setRegName] = useState('');
+  const [regLoading, setRegLoading] = useState(false);
 
   const handleRegister = async () => {
     if (!regEmail || !regPassword) {
@@ -102,7 +107,7 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
       }
       setUser(data as UserInfo);
       toast({ title: '注册成功' });
-      onOpenChange(false);
+      onClose();
       setRegEmail('');
       setRegPassword('');
       setRegName('');
@@ -113,9 +118,17 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
     }
   };
 
-  const handleGithubLogin = () => {
-    window.location.href = `${API_BASE}/api/auth/github`;
-  };
+  return { regEmail, setRegEmail, regPassword, setRegPassword, regName, setRegName, regLoading, handleRegister };
+}
+
+/* eslint-disable max-lines-per-function */
+export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
+  const { setUser } = useAppStore();
+  const { githubEnabled, configLoaded } = useGithubConfig(open);
+
+  const handleClose = () => onOpenChange(false);
+  const loginForm = useLoginForm(setUser, handleClose);
+  const registerForm = useRegisterForm(setUser, handleClose);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -143,9 +156,9 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
                 id="login-email"
                 type="email"
                 placeholder="your@email.com"
-                value={loginEmail}
-                onChange={(e) => setLoginEmail(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                value={loginForm.loginEmail}
+                onChange={(e) => loginForm.setLoginEmail(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && loginForm.handleLogin()}
               />
             </div>
             <div className="space-y-2">
@@ -154,17 +167,17 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
                 id="login-password"
                 type="password"
                 placeholder="••••••••"
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                value={loginForm.loginPassword}
+                onChange={(e) => loginForm.setLoginPassword(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && loginForm.handleLogin()}
               />
             </div>
             <Button
-              onClick={handleLogin}
-              disabled={loginLoading}
+              onClick={loginForm.handleLogin}
+              disabled={loginForm.loginLoading}
               className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white"
             >
-              {loginLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              {loginForm.loginLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               登录
             </Button>
           </TabsContent>
@@ -175,8 +188,8 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
               <Input
                 id="reg-name"
                 placeholder="FishAI 用户"
-                value={regName}
-                onChange={(e) => setRegName(e.target.value)}
+                value={registerForm.regName}
+                onChange={(e) => registerForm.setRegName(e.target.value)}
               />
             </div>
             <div className="space-y-2">
@@ -185,8 +198,8 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
                 id="reg-email"
                 type="email"
                 placeholder="your@email.com"
-                value={regEmail}
-                onChange={(e) => setRegEmail(e.target.value)}
+                value={registerForm.regEmail}
+                onChange={(e) => registerForm.setRegEmail(e.target.value)}
               />
             </div>
             <div className="space-y-2">
@@ -195,17 +208,17 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
                 id="reg-password"
                 type="password"
                 placeholder="••••••••"
-                value={regPassword}
-                onChange={(e) => setRegPassword(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleRegister()}
+                value={registerForm.regPassword}
+                onChange={(e) => registerForm.setRegPassword(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && registerForm.handleRegister()}
               />
             </div>
             <Button
-              onClick={handleRegister}
-              disabled={regLoading}
+              onClick={registerForm.handleRegister}
+              disabled={registerForm.regLoading}
               className="w-full bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-600 hover:to-emerald-700 text-white"
             >
-              {regLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+              {registerForm.regLoading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
               注册
             </Button>
           </TabsContent>
@@ -225,7 +238,9 @@ export function AuthDialog({ open, onOpenChange }: AuthDialogProps) {
             </div>
             <Button
               variant="outline"
-              onClick={handleGithubLogin}
+              onClick={() => {
+                window.location.href = `${API_BASE}/api/auth/github`;
+              }}
               className="w-full flex items-center justify-center gap-2 h-10"
             >
               <Github className="w-4 h-4" />

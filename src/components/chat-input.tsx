@@ -12,17 +12,23 @@ interface ChatInputProps {
   streaming: boolean;
 }
 
-export function ChatInput({ input, setInput, onSend, onStop, streaming }: ChatInputProps) {
-  const { deepThinking, setDeepThinking, webSearch, setWebSearch } = useAppStore();
+function useTextareaHeight(input: string) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     const el = textareaRef.current;
     if (el) {
       el.style.height = 'auto';
-      el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+      el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
     }
   }, [input]);
+
+  return textareaRef;
+}
+
+export function ChatInput({ input, setInput, onSend, onStop, streaming }: ChatInputProps) {
+  const { deepThinking, setDeepThinking, webSearch, setWebSearch } = useAppStore();
+  const textareaRef = useTextareaHeight(input);
 
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {

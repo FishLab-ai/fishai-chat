@@ -116,7 +116,9 @@ export const useAppStore = create<AppStore>((set) => ({
           set({ user });
         }
       }
-    } catch {}
+    } catch {
+      // noop
+    }
   },
   logout: () => {
     set({ user: null, currentConversationId: null, conversations: [], messages: [] });
@@ -194,5 +196,7 @@ if (typeof window !== 'undefined') {
         useAppStore.setState({ themeMode: saved });
       }, 0);
     }
-  } catch {}
+  } catch {
+    // noop
+  }
 }

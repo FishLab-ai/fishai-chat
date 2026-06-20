@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Fish, ArrowRight, BookOpen, User, Settings, LogOut, ArrowLeftRight, Trash2 } from 'lucide-react';
+import { Fish, ArrowRight, BookOpen, User, Settings, LogOut, ArrowLeftRight } from 'lucide-react';
 import { useAppStore, type UserInfo } from '@/lib/store';
 import { API_BASE } from '@/lib/api';
 import { AuthDialog } from '@/components/auth-dialog';
@@ -17,14 +17,73 @@ import {
 import { toast } from '@/hooks/use-toast';
 
 function getCookie(name: string): string | null {
-  const match = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/([.$?*|{}()\[\]\\\/+^])/g, '\\$1') + '=([^;]*)'));
+  const escapedName = name.replace(/[.$?*|{}()[\]\\/+^]/g, '\\$&');
+  const match = document.cookie.match(new RegExp(`(?:^|; )${escapedName}=([^;]*)`));
   return match ? decodeURIComponent(match[1]) : null;
 }
 
 function deleteCookie(name: string) {
-  document.cookie = name + '=; Path=/; Max-Age=0';
+  document.cookie = `${name}=; Path=/; Max-Age=0`;
 }
 
+function handleGitHubCallback(setUser: (user: UserInfo) => void) {
+  const params = new URLSearchParams(window.location.search);
+
+  if (params.get('gh_auth') === '1') {
+    const cookieVal = getCookie('fishai-github-user');
+    if (cookieVal) {
+      fetch(`${API_BASE}/api/auth/github/decrypt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ encrypted: cookieVal }),
+      })
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.id) {
+            setUser(data as UserInfo);
+            toast({ title: 'GitHub 登录成功' });
+          } else {
+            toast({ title: 'GitHub 登录失败', variant: 'destructive' });
+          }
+        })
+        .catch(() => {
+          toast({ title: 'GitHub 登录失败', variant: 'destructive' });
+        })
+        .finally(() => {
+          deleteCookie('fishai-github-user');
+        });
+    }
+    params.delete('gh_auth');
+    const cleanUrl = params.toString()
+      ? `${window.location.pathname}?${params.toString()}`
+      : window.location.pathname;
+    window.history.replaceState({}, '', cleanUrl);
+  }
+
+  const ghError = params.get('gh_error');
+  if (ghError) {
+    const errorMessages: Record<string, string> = {
+      unconfigured: 'GitHub OAuth 未配置',
+      no_code: '授权码缺失',
+      token_failed: '获取令牌失败',
+      no_user: '获取用户信息失败',
+      no_email: '无法获取 GitHub 邮箱，请确保邮箱已公开',
+      csrf_invalid: '安全校验失败，请重试',
+      server_error: '服务器错误',
+    };
+    toast({
+      title: errorMessages[ghError] || 'GitHub 登录失败',
+      variant: 'destructive',
+    });
+    params.delete('gh_error');
+    const cleanUrl = params.toString()
+      ? `${window.location.pathname}?${params.toString()}`
+      : window.location.pathname;
+    window.history.replaceState({}, '', cleanUrl);
+  }
+}
+
+/* eslint-disable max-lines-per-function */
 export default function HomePage() {
   const { initAuth, setUser, user, logout } = useAppStore();
   const [authOpen, setAuthOpen] = useState(false);
@@ -34,62 +93,8 @@ export default function HomePage() {
     initAuth();
   }, [initAuth]);
 
-  // Handle GitHub OAuth callback
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-
-    if (params.get('gh_auth') === '1') {
-      const cookieVal = getCookie('fishai-github-user');
-      if (cookieVal) {
-        fetch(`${API_BASE}/api/auth/github/decrypt`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ encrypted: cookieVal }),
-        })
-          .then((r) => r.json())
-          .then((data) => {
-            if (data.id) {
-              setUser(data as UserInfo);
-              toast({ title: 'GitHub 登录成功' });
-            } else {
-              toast({ title: 'GitHub 登录失败', variant: 'destructive' });
-            }
-          })
-          .catch(() => {
-            toast({ title: 'GitHub 登录失败', variant: 'destructive' });
-          })
-          .finally(() => {
-            deleteCookie('fishai-github-user');
-          });
-      }
-      params.delete('gh_auth');
-      const cleanUrl = params.toString()
-        ? `${window.location.pathname}?${params.toString()}`
-        : window.location.pathname;
-      window.history.replaceState({}, '', cleanUrl);
-    }
-
-    const ghError = params.get('gh_error');
-    if (ghError) {
-      const errorMessages: Record<string, string> = {
-        unconfigured: 'GitHub OAuth 未配置',
-        no_code: '授权码缺失',
-        token_failed: '获取令牌失败',
-        no_user: '获取用户信息失败',
-        no_email: '无法获取 GitHub 邮箱，请确保邮箱已公开',
-        csrf_invalid: '安全校验失败，请重试',
-        server_error: '服务器错误',
-      };
-      toast({
-        title: errorMessages[ghError] || 'GitHub 登录失败',
-        variant: 'destructive',
-      });
-      params.delete('gh_error');
-      const cleanUrl = params.toString()
-        ? `${window.location.pathname}?${params.toString()}`
-        : window.location.pathname;
-      window.history.replaceState({}, '', cleanUrl);
-    }
+    handleGitHubCallback(setUser);
   }, [setUser]);
 
   return (
