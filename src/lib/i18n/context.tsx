@@ -3,13 +3,15 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import zhCN, { type Translations } from './locales/zh-CN';
 import enUS from './locales/en-US';
+import zhTW from './locales/zh-TW';
 
-export type Locale = 'zh-CN' | 'en-US';
+export type Locale = 'zh-CN' | 'zh-TW' | 'en-US';
 
 const STORAGE_KEY = 'fishai-locale';
 
 const localeMap: Record<Locale, Translations> = {
   'zh-CN': zhCN as unknown as Translations,
+  'zh-TW': zhTW as unknown as Translations,
   'en-US': enUS as unknown as Translations,
 };
 
@@ -19,13 +21,16 @@ function getInitialLocale(): Locale {
   }
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === 'zh-CN' || stored === 'en-US') {
+    if (stored === 'zh-CN' || stored === 'zh-TW' || stored === 'en-US') {
       return stored;
     }
   } catch {
     // localStorage may be unavailable
   }
   const browserLang = navigator.language;
+  if (browserLang === 'zh-TW' || browserLang === 'zh-Hant' || browserLang === 'zh-HK') {
+    return 'zh-TW';
+  }
   if (browserLang && browserLang.startsWith('zh')) {
     return 'zh-CN';
   }
@@ -54,7 +59,7 @@ export function I18nProvider({ children }: { children: React.ReactNode }) {
 
   // Update html lang attribute when locale changes
   useEffect(() => {
-    document.documentElement.lang = locale === 'zh-CN' ? 'zh-CN' : 'en';
+    document.documentElement.lang = locale === 'en-US' ? 'en' : locale;
   }, [locale]);
 
   const setLocale = useCallback((newLocale: Locale) => {
