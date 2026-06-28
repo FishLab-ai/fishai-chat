@@ -120,6 +120,7 @@ const zhCN = {
     title: '设置',
     description: '自定义 FishAI 的外观和行为',
     language: '语言',
+    languageDescription: '选择界面显示语言',
     zhCN: '简体中文',
     zhTW: '繁體中文',
     enUS: 'English',

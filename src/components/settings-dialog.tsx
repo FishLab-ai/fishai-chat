@@ -435,10 +435,11 @@ export function SettingsDialog() {
         <div className="space-y-6 mt-2">
           {/* ── Language ── */}
           <section>
-            <h3 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 mb-3">
+            <h3 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 mb-1">
               <Globe className="w-4 h-4 inline-block mr-1.5 -mt-0.5" />
               {t.settings.language}
             </h3>
+            <p className="text-[11px] text-neutral-400 dark:text-neutral-500 mb-3">{t.settings.languageDescription}</p>
             <div className="grid grid-cols-3 gap-2">
               {([
                 { key: 'zh-CN' as Locale, label: t.settings.zhCN },

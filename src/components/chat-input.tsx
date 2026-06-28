@@ -44,7 +44,7 @@ export function ChatInput({ input, setInput, onSend, onStop, streaming }: ChatIn
   return (
     <div className="px-3 pb-4 pt-3">
       <div className="max-w-2xl mx-auto">
-        <div className="rounded-2xl bg-white/80 dark:bg-neutral-800/80 backdrop-blur-xl shadow-sm overflow-hidden">
+        <div className="rounded-2xl bg-white/80 dark:bg-neutral-800/80 backdrop-blur-xl border border-neutral-200/60 dark:border-neutral-700/40 shadow-lg shadow-neutral-200/30 dark:shadow-black/20 overflow-hidden">
           <div className="flex items-center gap-2 px-3 pt-2.5 pb-1">
             <button
               onClick={() => setDeepThinking(!deepThinking)}

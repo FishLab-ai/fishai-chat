@@ -122,6 +122,7 @@ const enUS: Translations = {
     title: 'Settings',
     description: 'Customize FishAI\'s appearance and behavior',
     language: 'Language',
+    languageDescription: 'Choose the interface display language',
     zhCN: 'Simplified Chinese',
     zhTW: 'Traditional Chinese',
     enUS: 'English',

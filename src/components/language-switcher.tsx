@@ -24,9 +24,9 @@ export function LanguageSwitcher() {
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium transition-all duration-200 border border-neutral-200 dark:border-neutral-700 text-neutral-400 dark:text-neutral-500 hover:border-neutral-300 dark:hover:border-neutral-600 hover:text-neutral-600 dark:hover:text-neutral-300 cursor-pointer"
+          className="inline-flex items-center gap-1.5 h-9 px-3 rounded-xl bg-white/70 dark:bg-neutral-800/70 backdrop-blur-xl border border-neutral-200/50 dark:border-neutral-700/30 text-neutral-500 dark:text-neutral-400 hover:text-emerald-600 dark:hover:text-emerald-400 hover:border-emerald-300/50 dark:hover:border-emerald-600/30 transition-all duration-200 text-xs font-medium cursor-pointer"
         >
-          <Globe className="w-3 h-3" />
+          <Globe className="w-3.5 h-3.5" />
           <span>{currentLabel}</span>
         </button>
       </DropdownMenuTrigger>

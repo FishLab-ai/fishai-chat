@@ -122,6 +122,7 @@ const zhTW = {
     title: '設定',
     description: '自訂 FishAI 的外觀和行為',
     language: '語言',
+    languageDescription: '選擇介面顯示語言',
     zhCN: '簡體中文',
     zhTW: '繁體中文',
     enUS: 'English',
