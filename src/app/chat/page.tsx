@@ -9,7 +9,7 @@ import { Sidebar } from '@/components/sidebar';
 import { SettingsDialog } from '@/components/settings-dialog';
 import { AuthDialog } from '@/components/auth-dialog';
 
-import { ChevronDown, Fish, Code2, Sparkles, Plus, AlignLeft } from 'lucide-react';
+import { ChevronDown, Fish, Plus, AlignLeft } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useI18n, type Translations } from '@/lib/i18n';
 
@@ -58,28 +58,6 @@ function useChatStream(updateMessage: (id: string, updates: Partial<ChatMessage>
   }, [updateMessage]);
 
   return { thinkingRef, searchResultsRef, bufferRef, startTypewriter, stopTypewriter, streamingMsgId };
-}
-
-function SuggestionsList({ onSuggestionClick, streaming, t }: { onSuggestionClick: (prompt: string) => void; streaming: boolean; t: Translations }) {
-  const suggestions = [
-    { id: 'code', icon: Code2, label: t.chat.suggestions.code, prompt: t.chat.suggestionPrompts.code },
-    { id: 'rust', icon: Sparkles, label: t.chat.suggestions.rust, prompt: t.chat.suggestionPrompts.rust },
-    { id: 'news', icon: Fish, label: t.chat.suggestions.news, prompt: t.chat.suggestionPrompts.news },
-  ];
-
-  return (
-    <div className="flex flex-col sm:flex-row gap-2 w-full max-w-lg">
-      {suggestions.map((s) => (
-        <button key={s.id} onClick={() => onSuggestionClick(s.prompt)} disabled={streaming}
-          className="flex-1 flex items-center gap-2.5 p-3 rounded-xl border border-neutral-200/80 dark:border-neutral-800/60 hover:border-emerald-300 dark:hover:border-emerald-700 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 text-left transition-all duration-200 hover:shadow-sm group disabled:opacity-50 disabled:pointer-events-none">
-          <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center shrink-0 group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/40 transition-colors">
-            <s.icon className="w-4 h-4 text-emerald-500" />
-          </div>
-          <span className="text-xs font-medium text-neutral-700 dark:text-neutral-300">{s.label}</span>
-        </button>
-      ))}
-    </div>
-  );
 }
 
 function MessageList({ messages, streaming, streamingMsgId, activeDeepThinking }: {
@@ -171,21 +149,6 @@ function ScrollToBottomBtn({ onClick, t }: { onClick: () => void; t: Translation
         <ChevronDown className="w-3.5 h-3.5" />
         {t.common.scrollToBottom}
       </button>
-    </div>
-  );
-}
-
-function WelcomeScreen({ onSuggestionClick, streaming, t }: { onSuggestionClick: (prompt: string) => void; streaming: boolean; t: Translations }) {
-  return (
-    <div className="flex flex-col items-center justify-center min-h-[55vh] gap-6">
-      <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-xl shadow-emerald-500/20">
-        <Fish className="w-7 h-7 text-white" />
-      </div>
-      <div className="text-center space-y-1.5">
-        <p className="text-base font-medium text-neutral-700 dark:text-neutral-300">{t.chat.welcomeTitle}</p>
-        <p className="text-xs text-neutral-400 dark:text-neutral-500">{t.chat.welcomeSubtitle}</p>
-      </div>
-      <SuggestionsList onSuggestionClick={onSuggestionClick} streaming={streaming} t={t} />
     </div>
   );
 }
@@ -377,7 +340,14 @@ export default function ChatPage() {
       <main ref={scrollContainerRef} onScroll={handleScroll} className="h-full overflow-y-auto scroll-smooth">
         <div className="max-w-2xl mx-auto px-4 pt-14 pb-52">
           {messages.length === 0
-            ? <WelcomeScreen onSuggestionClick={send} streaming={streaming} t={t} />
+            ? (
+              <div className="flex flex-col items-center justify-center min-h-[55vh] gap-6">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-600 flex items-center justify-center shadow-xl shadow-emerald-500/20">
+                  <Fish className="w-7 h-7 text-white" />
+                </div>
+                <p className="text-base font-medium text-neutral-700 dark:text-neutral-300">{t.chat.welcomeTitle}</p>
+              </div>
+            )
             : <MessageList messages={messages} streaming={streaming} streamingMsgId={streamingMsgId} activeDeepThinking={activeDeepThinking} />}
           <div ref={chatEndRef} className="h-1" />
         </div>
