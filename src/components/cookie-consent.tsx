@@ -11,8 +11,12 @@ export function CookieConsent() {
   useEffect(() => {
     const consent = localStorage.getItem('fishai-cookie-consent');
     if (!consent) {
-      const timer = setTimeout(() => setVisible(true), 1500);
-      return () => clearTimeout(timer);
+      const showTimer = setTimeout(() => setVisible(true), 1500);
+      const hideTimer = setTimeout(() => {
+        localStorage.setItem('fishai-cookie-consent', 'declined');
+        setVisible(false);
+      }, 4500);
+      return () => { clearTimeout(showTimer); clearTimeout(hideTimer); };
     }
   }, []);
 
