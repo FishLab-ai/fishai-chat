@@ -71,6 +71,7 @@ const zhTW = {
     noResponseStream: '無回應串流',
     thinkingStatus: '深度思考中...',
     welcomeTitle: '有什麼可以幫你的？',
+    loginBanner: '登入後對話會被儲存到你的帳號中',
     welcomeSubtitle: '試試下面的快捷指令',
     suggestions: {
       code: 'Python 快排演算法',
@@ -161,7 +162,7 @@ const zhTW = {
   },
   cookie: {
     title: '隱私與 Cookie',
-    description: '我們使用本地儲存（Cookie 和 localStorage）來記住你的登入狀態、主題偏好和對話歷史。這些資料僅儲存在你的瀏覽器中，不會上傳至第三方。繼續使用即表示你同意我們的資料儲存方式。',
+    description: '我們使用本地儲存來記住你的登入狀態和主題偏好。對話歷史和使用者資料透過帳號管理，安全儲存在伺服器上。繼續使用即表示你同意我們的資料儲存方式。',
     browseOnly: '僅瀏覽',
     acceptAndContinue: '同意並繼續',
   },

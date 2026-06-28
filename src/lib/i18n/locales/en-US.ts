@@ -71,6 +71,7 @@ const enUS: Translations = {
     noResponseStream: 'No response stream',
     thinkingStatus: 'Thinking deeply...',
     welcomeTitle: 'How can I help you?',
+    loginBanner: 'Log in to save conversations to your account',
     welcomeSubtitle: 'Try these quick prompts',
     suggestions: {
       code: 'Python Quick Sort',
@@ -161,7 +162,7 @@ const enUS: Translations = {
   },
   cookie: {
     title: 'Privacy & Cookies',
-    description: 'We use local storage (cookies and localStorage) to remember your login status, theme preferences, and conversation history. This data is stored only in your browser and is never uploaded to third parties. By continuing to use this site, you agree to our data storage practices.',
+    description: 'We use local storage to remember your login status and theme preferences. Conversation history and user data are managed through your account and securely stored on the server. By continuing to use this site, you agree to our data storage practices.',
     browseOnly: 'Browse Only',
     acceptAndContinue: 'Accept & Continue',
   },

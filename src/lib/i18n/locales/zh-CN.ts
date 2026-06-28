@@ -69,6 +69,7 @@ const zhCN = {
     noResponseStream: '无响应流',
     thinkingStatus: '深度思考中...',
     welcomeTitle: '有什么可以帮你的？',
+    loginBanner: '登录后对话会被保存到你的账号中',
     welcomeSubtitle: '试试下面的快捷指令',
     suggestions: {
       code: 'Python 快排算法',
@@ -159,7 +160,7 @@ const zhCN = {
   },
   cookie: {
     title: '隐私与 Cookie',
-    description: '我们使用本地存储（Cookie 和 localStorage）来记住你的登录状态、主题偏好和对话历史。这些数据仅保存在你的浏览器中，不会上传至第三方。继续使用即表示你同意我们的数据存储方式。',
+    description: '我们使用本地存储来记住你的登录状态和主题偏好。对话历史和用户数据通过账号管理，安全存储在服务器上。继续使用即表示你同意我们的数据存储方式。',
     browseOnly: '仅浏览',
     acceptAndContinue: '同意并继续',
   },

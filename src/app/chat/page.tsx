@@ -9,7 +9,7 @@ import { Sidebar } from '@/components/sidebar';
 import { SettingsDialog } from '@/components/settings-dialog';
 import { AuthDialog } from '@/components/auth-dialog';
 
-import { ChevronDown, Fish, Plus, AlignLeft } from 'lucide-react';
+import { ChevronDown, Fish, Plus, AlignLeft, LogIn } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useI18n, type Translations } from '@/lib/i18n';
 
@@ -149,6 +149,29 @@ function ScrollToBottomBtn({ onClick, t }: { onClick: () => void; t: Translation
         <ChevronDown className="w-3.5 h-3.5" />
         {t.common.scrollToBottom}
       </button>
+    </div>
+  );
+}
+
+function LoginReminderBanner({ onLogin, t }: { onLogin: () => void; t: Translations }) {
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setVisible(false), 3000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  if (!visible) return null;
+
+  return (
+    <div
+      onClick={onLogin}
+      className="fixed top-12 left-1/2 -translate-x-1/2 z-30 animate-in slide-in-from-top-2 fade-in duration-300 cursor-pointer"
+    >
+      <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200/60 dark:border-emerald-800/40 shadow-lg shadow-emerald-500/5 transition-all duration-200 hover:shadow-emerald-500/10 hover:border-emerald-300/80 dark:hover:border-emerald-700/60">
+        <LogIn className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+        <span className="text-xs text-emerald-700 dark:text-emerald-300 whitespace-nowrap">{t.chat.loginBanner}</span>
+      </div>
     </div>
   );
 }
@@ -353,6 +376,7 @@ export default function ChatPage() {
         </div>
       </main>
       <ChatHeader onOpenSidebar={() => setSidebarOpen(true)} onNewChat={handleNewChat} t={t} />
+      {!user && <LoginReminderBanner onLogin={() => setAuthOpen(true)} t={t} />}
       {showScrollBtn && (
         <ScrollToBottomBtn onClick={() => {setShowScrollBtn(false); scrollToBottom();}} t={t} />
       )}
