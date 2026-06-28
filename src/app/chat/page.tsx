@@ -9,7 +9,7 @@ import { Sidebar } from '@/components/sidebar';
 import { SettingsDialog } from '@/components/settings-dialog';
 import { AuthDialog } from '@/components/auth-dialog';
 
-import { ChevronDown, Fish, Code2, Sparkles, Plus, AlignLeft, Settings } from 'lucide-react';
+import { ChevronDown, Fish, Code2, Sparkles, Plus, AlignLeft } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { useI18n, type Translations } from '@/lib/i18n';
 
@@ -146,7 +146,7 @@ function handleStreamError(err: unknown, aid: string, updateMessage: (id: string
   }
 }
 
-function ChatHeader({ onOpenSidebar, onNewChat, onOpenSettings, t }: { onOpenSidebar: () => void; onNewChat: () => void; onOpenSettings: () => void; t: Translations }) {
+function ChatHeader({ onOpenSidebar, onNewChat, t }: { onOpenSidebar: () => void; onNewChat: () => void; t: Translations }) {
   return (
     <header className="fixed top-0 left-0 right-0 z-20 flex items-center h-11 px-3">
       <button onClick={onOpenSidebar}
@@ -154,24 +154,11 @@ function ChatHeader({ onOpenSidebar, onNewChat, onOpenSettings, t }: { onOpenSid
         title={t.chat.chatHistory}>
         <AlignLeft className="w-4 h-4" />
       </button>
-      <div className="flex-1 flex justify-center">
-        <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-400 dark:text-neutral-500 select-none">
-          <Fish className="w-3.5 h-3.5 text-emerald-500" />
-          FishAI
-        </span>
-      </div>
-      <div className="flex items-center gap-0.5">
-        <button onClick={onNewChat}
-          className="h-8 w-8 rounded-lg flex items-center justify-center text-neutral-400 dark:text-neutral-500 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all duration-200"
-          title={t.chat.newChat}>
-          <Plus className="w-4 h-4" />
-        </button>
-        <button onClick={onOpenSettings}
-          className="h-8 w-8 rounded-lg flex items-center justify-center text-neutral-400 dark:text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all duration-200"
-          title={t.common.settings}>
-          <Settings className="w-4 h-4" />
-        </button>
-      </div>
+      <button onClick={onNewChat}
+        className="h-8 w-8 rounded-lg flex items-center justify-center text-neutral-400 dark:text-neutral-500 hover:text-emerald-600 dark:hover:text-emerald-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-all duration-200"
+        title={t.chat.newChat}>
+        <Plus className="w-4 h-4" />
+      </button>
     </header>
   );
 }
@@ -371,7 +358,7 @@ export default function ChatPage() {
   const {
     user, authOpen, setAuthOpen, currentConversationId, setCurrentConversationId,
     setConversations, messages, setMessages, addMessage, updateMessage,
-    streaming, setStreaming, deepThinking, webSearch, memoryMode, setSidebarOpen, setSettingsOpen,
+    streaming, setStreaming, deepThinking, webSearch, memoryMode, setSidebarOpen,
   } = useAppStore();
   const { t } = useI18n();
 
@@ -395,7 +382,7 @@ export default function ChatPage() {
           <div ref={chatEndRef} className="h-1" />
         </div>
       </main>
-      <ChatHeader onOpenSidebar={() => setSidebarOpen(true)} onNewChat={handleNewChat} onOpenSettings={() => setSettingsOpen(true)} t={t} />
+      <ChatHeader onOpenSidebar={() => setSidebarOpen(true)} onNewChat={handleNewChat} t={t} />
       {showScrollBtn && (
         <ScrollToBottomBtn onClick={() => {setShowScrollBtn(false); scrollToBottom();}} t={t} />
       )}
